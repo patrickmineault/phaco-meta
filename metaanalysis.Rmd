@@ -1,6 +1,8 @@
 ---
-title: "Meta analysis"
-output: html_notebook
+title: "Phaco meta analysis"
+author: "Patrick Mineault"
+date: "14/02/2017"
+output: pdf_document
 ---
 
 # Load data
