@@ -229,7 +229,71 @@ m <- metacont(imp.LastPeriodEyes,
 forest(m, comb.fixed=FALSE)
 ```
 
+## Correlation between meds and drop in IOP
+
+How is IOP drop related to change in meds? Two hypotheses:
+
+  * Those studies that see the largest IOP drops also have drop in meds, as doctors see that can use the newfound *slack* to decrease the number of meds people take
+  * The studies that see the largest IOP drops are those that don't change meds, because dropping meds would also increase IOP
+
+So which is it?
+
+```{r}
+df <- df %>% mutate(imp.RxChangeMean = RxPostOpMean - RxPreOpMean,
+              imp.RxChangeSEM  = sqrt(imp.RxPostOpStdDev ** 2 + imp.RxPreOpStdDev ** 2) / sqrt(imp.LastPeriodEyes))
+
+ggplot(df %>% filter(MIGsYorN == 'N'), aes(x   =imp.LastPeriodIOPChangeMean, 
+               xmin=imp.LastPeriodIOPChangeMean - 1.96*imp.LastPeriodIOPChangeSEM,
+               xmax=imp.LastPeriodIOPChangeMean + 1.96*imp.LastPeriodIOPChangeSEM,
+               y   = imp.RxChangeMean,
+               ymin= imp.RxChangeMean - 1.96*imp.RxChangeSEM,
+               ymax= imp.RxChangeMean + 1.96*imp.RxChangeSEM,
+               color=subtype
+               )) + geom_errorbar() + geom_errorbarh()
+```
+
+```{r}
+ggplot(df %>% filter(subtype=='OAG' & MIGsYorN == 'N'), aes(x   =imp.LastPeriodIOPChangeMean, 
+               xmin=imp.LastPeriodIOPChangeMean - 1.96*imp.LastPeriodIOPChangeSEM,
+               xmax=imp.LastPeriodIOPChangeMean + 1.96*imp.LastPeriodIOPChangeSEM,
+               y   = imp.RxChangeMean,
+               ymin= imp.RxChangeMean - 1.96*imp.RxChangeSEM,
+               ymax= imp.RxChangeMean + 1.96*imp.RxChangeSEM,
+               label=study.name
+               )) + geom_errorbar(alpha=.2) + geom_errorbarh(alpha=.2) + ggtitle('OAG only') + geom_text_repel(segment.alpha = 0)
+```
+
+In fact, apart from the Pfeiffer et al. (2015) study, there is an apparent positive correlation between the two effect sizes: studies with larger drops in IOP also tend to see larger drops in Rx.
+
+```{r warning=FALSE}
+draw.corr <- function(filter.out) {
+  if(filter.out) {
+    d_ <- df %>% filter(!(study.name %in% c("Pfeiffer et. al (2015)")))
+  } else {
+    d_ <- df
+  }
+  d_ <- d_ %>% filter(subtype=='OAG' & MIGsYorN == 'N') %>% 
+    dplyr::mutate(x = rnorm(n = n(), mean=imp.LastPeriodIOPChangeMean, sd = imp.LastPeriodIOPChangeSEM),
+                  y = rnorm(n = n(), mean=imp.RxChangeMean, sd = imp.RxChangeSEM))
+  with(d_ %>% filter(!is.na(x) & !is.na(y)), cor(x, y))
+}
+
+cat("Mean +- SE correlation, without Pfeiffer et al\n")
+drawn.corrs <- replicate(n = 100, draw.corr(TRUE))
+mean(drawn.corrs)
+sd(drawn.corrs)
+
+cat("Mean +- SE correlation, with Pfeiffer et al\n")
+drawn.corrs <- replicate(n = 100, draw.corr(FALSE))
+mean(drawn.corrs)
+sd(drawn.corrs)
+
+```
+
 # Impute under every scenario
+
+Look at what happens depending on how we impute the data.
+
 ```{r}
 results <- list()
 for(loss in c('lo', 'hi')) {
