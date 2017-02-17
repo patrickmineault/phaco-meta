@@ -6,7 +6,7 @@ output: pdf_document
 ---
 
 # Load data
-We load data from a CSV exported from Stata. The `Mo` variables refer to what happens after 6 months. The `W`, `X`, `Y`, `Z`, `AA` variables refer to what happens after 12 months. That's a bug in how Stata exports names of variables which start with a number - the columns were named `6mo...` and `12mo...`.
+We load data from a CSV exported from Stata. The `Mo` variables refer to what happens after 6 months. The letter variables `Z`, `AA` etc. refer to what happens after 12 months. That's a bug in how Stata exports names of variables which start with a number - the columns were named `6mo...` and `12mo...`.
 
 ```{r} 
 library(tidyverse)
@@ -20,22 +20,41 @@ df <- df %>% rename(SixMoEyes = MoEyes,
               SixMoIOPStdDev = MoIOPStdDev,
               SixMoAbsIOPChangeMean = MoAbsIOPChangeMean,
               SixMoAbsIOPChangeStdDev = MoAbsIOPChangeStdDev,
-              OneYEyes = W,
-              OneYIOPMean = X,
-              OneYIOPStdDev = Y,
-              OneYAbsIOPChangeMean = Z,
-              OneYAbsIOPChangeStdDev = AA,
+              OneYEyes = Y,
+              OneYIOPMean = Z,
+              OneYIOPStdDev = AA,
+              OneYAbsIOPChangeMean = AB,
+              OneYAbsIOPChangeStdDev = AC,
               LastPeriodAbsIOPChangeStdDev = LastPeriodAbsIOPChangeStd,
               LastPeriodEyes = LastPeriodofEyes
               )
 
-df <- df %>% mutate(subtype = as.factor(ifelse(is.na(OAG), 'OAG',
-                          ifelse(OAG > 50, 'OAG',
-                                 ifelse(ACG > 50, 'ACG',
-                                        ifelse(PXG > 50, 'PXG', NA))))))
+df <- df %>% mutate(subtype = as.factor(
+  ifelse(acuteangleclosure == 'Y', 'acute', 
+         ifelse(MIGsYorN == 'Y', 'MIGS',
+            ifelse(OAG > 50, 'OAG',
+              ifelse(ACG > 50, 'ACG',
+                ifelse(PXG > 50, 'PXG', NA)))))))
 
-df <- df %>% mutate(study.name = paste0(Author, ' (', Year, ')'))
+df <- df %>% mutate(study.name = paste0(Author, ' (', Year, ')', ifelse(WashOut == 'Y', '*', '')))
+df <- df %>% filter(Author != "Mierzejewski et. al")  # Exclude Mierzejewski studies, they're abstracts and weirdly coded.
+df <- df %>% dplyr::arrange(Year, study.name)
 ```
+
+# Summary plot
+```{r fig.width = 10, fig.height = 10}
+ggplot(df, aes(x = PreOpEyes, y = 
+                 ifelse(!is.na(LastPeriodIOPMean) & !is.na(PreOpIOPMean), 
+                        LastPeriodIOPMean - PreOpIOPMean,
+                        ifelse(!is.na(LastPeriodAbsIOPChangeMean),
+                               LastPeriodAbsIOPChangeMean,
+                               ifelse(!is.na(OneYAbsIOPChangeMean),
+                                      OneYAbsIOPChangeMean,
+                                      OneYIOPMean - PreOpIOPMean
+                                      )))
+                               , label = study.name, color = subtype)) + geom_point() + ylab('IOP change last period') + geom_text_repel()
+```
+
 
 # Analysis without imputation
 
@@ -73,7 +92,7 @@ forest(m, comb.fixed = FALSE)
 
 ## Subgroup analysis
 
-```{r fig.width=10, fig.height=7}
+```{r fig.width=10, fig.height=9}
 m <- metagen(LastPeriodAbsIOPChangeMean, 
              LastPeriodAbsIOPChangeStdDev / sqrt(LastPeriodEyes), 
              study.name, 
@@ -82,6 +101,8 @@ m <- metagen(LastPeriodAbsIOPChangeMean,
              byvar=subtype)
 forest(m, comb.fixed = FALSE)
 ```
+
+There's too much missing data to anything useful with this data. 
 
 # Analyses with imputation
 
@@ -184,8 +205,7 @@ df <- impute.df(df, losses[['lo']], corrs[['hi']], deltas[['lo']])
 m <- metagen(imp.SixMoIOPChangeMean, 
              imp.SixMoIOPChangeSEM, 
              study.name, 
-             data=df,
-             subset=!is.na(imp.SixMoIOPChangeSEM),
+             data=df %>% filter(!is.na(imp.SixMoIOPChangeSEM), subtype != 'MIGS') %>% mutate(subtype = droplevels(subtype)),
              byvar=subtype)
 forest(m, comb.fixed=FALSE)
 ```
@@ -196,26 +216,25 @@ forest(m, comb.fixed=FALSE)
 m <- metagen(imp.OneYIOPChangeMean, 
              imp.OneYIOPChangeSEM, 
              study.name, 
-             data=df,
-             subset=!is.na(imp.OneYIOPChangeSEM),
+             data=df %>% filter(!is.na(imp.OneYIOPChangeSEM), subtype != 'MIGS') %>% mutate(subtype = droplevels(subtype)),
              byvar=subtype)
 forest(m, comb.fixed=FALSE)
 ```
 ## Last period
 
-```{r fig.width=10, fig.height=10}
+```{r fig.width=10, fig.height=15}
 m <- metagen(imp.LastPeriodIOPChangeMean, 
              imp.LastPeriodIOPChangeSEM, 
              study.name, 
-             data=df,
-             subset=!is.na(imp.LastPeriodIOPChangeSEM) & MIGsYorN == 'N',
+             data=df %>% filter(!is.na(imp.LastPeriodIOPChangeSEM)),
+             subset=!is.na(imp.LastPeriodIOPChangeSEM),
              byvar=subtype)
 forest(m, comb.fixed=FALSE)
 ```
 
 ## Meds
 
-```{r fig.width=10, fig.height=12}
+```{r fig.width=10, fig.height=16}
 m <- metacont(imp.LastPeriodEyes,
               RxPostOpMean, 
               imp.RxPostOpStdDev,
@@ -224,10 +243,13 @@ m <- metacont(imp.LastPeriodEyes,
               imp.RxPreOpStdDev,
               study.name, 
               data=df,
-              subset=!is.na(imp.RxPostOpStdDev) & !is.na(imp.RxPostOpStdDev) & MIGsYorN == 'N',
+              subset=!is.na(imp.RxPreOpStdDev) & !is.na(imp.RxPostOpStdDev),
               byvar=subtype)
 forest(m, comb.fixed=FALSE)
 ```
+
+## Multivariate model to integrate across time
+
 
 ## Correlation between meds and drop in IOP
 
@@ -242,7 +264,7 @@ So which is it?
 df <- df %>% mutate(imp.RxChangeMean = RxPostOpMean - RxPreOpMean,
               imp.RxChangeSEM  = sqrt(imp.RxPostOpStdDev ** 2 + imp.RxPreOpStdDev ** 2) / sqrt(imp.LastPeriodEyes))
 
-ggplot(df %>% filter(MIGsYorN == 'N'), aes(x   =imp.LastPeriodIOPChangeMean, 
+ggplot(df, aes(x   =imp.LastPeriodIOPChangeMean, 
                xmin=imp.LastPeriodIOPChangeMean - 1.96*imp.LastPeriodIOPChangeSEM,
                xmax=imp.LastPeriodIOPChangeMean + 1.96*imp.LastPeriodIOPChangeSEM,
                y   = imp.RxChangeMean,
@@ -266,35 +288,151 @@ ggplot(df %>% filter(subtype=='OAG' & MIGsYorN == 'N'), aes(x   =imp.LastPeriodI
 In fact, apart from the Pfeiffer et al. (2015) study, there is an apparent positive correlation between the two effect sizes: studies with larger drops in IOP also tend to see larger drops in Rx.
 
 ```{r warning=FALSE}
-draw.corr <- function(filter.out) {
-  if(filter.out) {
-    d_ <- df %>% filter(!(study.name %in% c("Pfeiffer et. al (2015)")))
-  } else {
-    d_ <- df
-  }
-  d_ <- d_ %>% filter(subtype=='OAG' & MIGsYorN == 'N') %>% 
-    dplyr::mutate(x = rnorm(n = n(), mean=imp.LastPeriodIOPChangeMean, sd = imp.LastPeriodIOPChangeSEM),
-                  y = rnorm(n = n(), mean=imp.RxChangeMean, sd = imp.RxChangeSEM))
+draw.corr <- function(x.mean, x.sem, y.mean, y.sem) {
+  d_ <- data.frame(x = rnorm(n = length(x.mean), mean=x.mean, sd = x.sem),
+                  y = rnorm(n = length(x.mean), mean=y.mean, sd = y.sem))
   with(d_ %>% filter(!is.na(x) & !is.na(y)), cor(x, y))
 }
 
 cat("Mean +- SE correlation, without Pfeiffer et al\n")
-drawn.corrs <- replicate(n = 100, draw.corr(TRUE))
+df_ <- df %>% filter(!(study.name %in% c("Pfeiffer et. al (2015)")), subtype=='OAG')
+drawn.corrs <- with(df_, replicate(n = 100, 
+                                   draw.corr(imp.LastPeriodIOPChangeMean, imp.LastPeriodIOPChangeSEM, imp.RxChangeMean, imp.RxChangeSEM)))
 mean(drawn.corrs)
 sd(drawn.corrs)
 
 cat("Mean +- SE correlation, with Pfeiffer et al\n")
-drawn.corrs <- replicate(n = 100, draw.corr(FALSE))
+df_ <- df %>% filter(subtype=='OAG')
+drawn.corrs <- with(df_, replicate(n = 100, 
+                                  draw.corr(imp.LastPeriodIOPChangeMean, imp.LastPeriodIOPChangeSEM, imp.RxChangeMean, imp.RxChangeSEM)))
 mean(drawn.corrs)
 sd(drawn.corrs)
 
+```
+
+## Joint inferences
+
+Measure the correlation between different outcomes (IOP at 6 months vs. 12 months).
+
+```{r}
+ggplot(df, aes(x   =imp.SixMoIOPChangeMean, 
+               xmin=imp.SixMoIOPChangeMean - 1.96*imp.SixMoIOPChangeSEM,
+               xmax=imp.SixMoIOPChangeMean + 1.96*imp.SixMoIOPChangeSEM,
+               y   = imp.OneYIOPChangeMean,
+               ymin= imp.OneYIOPChangeMean - 1.96*imp.OneYIOPChangeSEM,
+               ymax= imp.OneYIOPChangeMean + 1.96*imp.OneYIOPChangeSEM,
+               label=study.name,
+               color=subtype
+               )) + geom_errorbar() + geom_errorbarh()
+```
+
+It's very clear that six months and 12 months IOP are highly correlated. 
+
+```{r warning=FALSE}
+df_ <- df %>% filter(subtype=='OAG')
+drawn.corrs <- with(df_, replicate(n = 100, 
+                                   draw.corr(imp.SixMoIOPChangeMean, imp.SixMoIOPChangeSEM, imp.OneYIOPChangeMean, imp.OneYIOPChangeSEM)))
+cat("Mean +- SE correlation, OAG only\n")
+print(mean(drawn.corrs))
+print(sd(drawn.corrs))
+
+df_ <- df
+drawn.corrs <- with(df_, replicate(n = 100, 
+                                   draw.corr(imp.SixMoIOPChangeMean, imp.SixMoIOPChangeSEM, imp.OneYIOPChangeMean, imp.OneYIOPChangeSEM)))
+cat("Mean +- SE correlation, All subtypes\n")
+print(mean(drawn.corrs))
+print(sd(drawn.corrs))
+```
+
+Let's repeat the same analysis, this time for 12 months vs. last period
+
+```{r warning=FALSE}
+df_ <- df %>% filter(subtype=='OAG')
+drawn.corrs <- with(df_, replicate(n = 100, 
+                         draw.corr(imp.LastPeriodIOPChangeMean, imp.LastPeriodIOPChangeSEM, imp.OneYIOPChangeMean, imp.OneYIOPChangeSEM)))
+cat("Mean +- SE correlation, OAG only\n")
+print(mean(drawn.corrs))
+print(sd(drawn.corrs))
+
+df_ <- df
+drawn.corrs <- with(df_, replicate(n = 100, 
+                         draw.corr(imp.LastPeriodIOPChangeMean, imp.LastPeriodIOPChangeSEM, imp.OneYIOPChangeMean, imp.OneYIOPChangeSEM)))
+cat("Mean +- SE correlation, All subtypes\n")
+print(mean(drawn.corrs))
+print(sd(drawn.corrs))
+```
+
+That's also really high! Finally, 6 months vs. last period
+
+```{r warning=FALSE}
+df_ <- df %>% filter(subtype=='OAG')
+drawn.corrs <- with(df_, replicate(n = 100, 
+                         draw.corr(imp.LastPeriodIOPChangeMean, imp.LastPeriodIOPChangeSEM, imp.SixMoIOPChangeMean, imp.SixMoIOPChangeSEM)))
+cat("Mean +- SE correlation, OAG only\n")
+print(mean(drawn.corrs))
+print(sd(drawn.corrs))
+
+df_ <- df
+drawn.corrs <- with(df_, replicate(n = 100, 
+                         draw.corr(imp.LastPeriodIOPChangeMean, imp.LastPeriodIOPChangeSEM, imp.SixMoIOPChangeMean, imp.SixMoIOPChangeSEM)))
+cat("Mean +- SE correlation, All subtypes\n")
+print(mean(drawn.corrs))
+print(sd(drawn.corrs))
+```
+
+6 months is also highly correlated with the last period. Let's use mvmeta to infer the effect size for both 6 months and 12 months together.
+
+```{r}
+library(mvmeta)
+
+get.correlation.matrices.bi <- function(x, y, assumed.rho) {
+  S <- list()
+  for(i in 1:length(x)) {
+    x[i] <- ifelse(is.na(x[i]), y[i], x[i])
+    y[i] <- ifelse(is.na(y[i]), x[i], y[i])
+    S[[i]] <- matrix(c(x[i] ** 2, x[i] * y[i]* assumed.rho, 
+                       x[i] * y[i] * assumed.rho, y[i] ** 2), ncol=2)
+  }
+  S
+}
+
+df_ <- df %>% filter(!is.na(imp.SixMoIOPChangeSEM) | !is.na(imp.OneYIOPChangeSEM), subtype %in% c('OAG', 'ACG'))
+thefit <- mvmeta(cbind(imp.SixMoIOPChangeMean, imp.OneYIOPChangeMean) ~ subtype, 
+       S=get.correlation.matrices.bi(df_$imp.SixMoIOPChangeSEM, df_$imp.OneYIOPChangeSEM, .7),
+       data=df_,
+       method="reml")
+
+summary(thefit)
+newdata <- data.frame(subtype=c('OAG', 'ACG'))
+pred <- predict(thefit, newdata, se=TRUE)
+newdata$SixMoIOPChangeMean <- pred$fit[,1]
+newdata$OneYIOPChangeMean <- pred$fit[,2]
+newdata$SixMoIOPChangeSEM <- pred$se[,1]
+newdata$OneYIOPChangeSEM <- pred$se[,2]
+
+library(reshape2)
+nd <- melt(newdata)
+nd$period <- substr(nd$variable, 0, 4)
+nd$metric <- substr(nd$variable, nchar(as.character(nd$variable)) - 3, nchar(as.character(nd$variable)))
+nd
+df_ <- dcast(nd, formula = subtype + period ~ metric)
+df_$period <- relevel(as.factor(df_$period), ref='SixM')
+ggplot(df_, aes(x=period, 
+                y=Mean, 
+                ymin=Mean - 1.96*eSEM, 
+                ymax=Mean + 1.96*eSEM, 
+                group=subtype,
+                fill=subtype)) + geom_ribbon(alpha=.2) + geom_line(aes(color=subtype))
+
+# TODO(Patrick): repeat for three time periods
 ```
 
 # Impute under every scenario
 
 Look at what happens depending on how we impute the data.
 
-```{r}
+```{r eval=FALSE}
+# TODO(Patrick): Fix this.
 results <- list()
 for(loss in c('lo', 'hi')) {
   for(corr in c('lo', 'hi')) {
