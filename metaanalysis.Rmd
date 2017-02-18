@@ -13,32 +13,10 @@ library(tidyverse)
 library(meta)
 library(ggrepel)
 
+source("read-data.R")
+
 setwd("~/Documents/phaco")
-df <- read.csv("phaco.csv", na.strings='-')
-df <- df %>% rename(SixMoEyes = MoEyes,
-              SixMoIOPMean = MoIOPMean,
-              SixMoIOPStdDev = MoIOPStdDev,
-              SixMoAbsIOPChangeMean = MoAbsIOPChangeMean,
-              SixMoAbsIOPChangeStdDev = MoAbsIOPChangeStdDev,
-              OneYEyes = Y,
-              OneYIOPMean = Z,
-              OneYIOPStdDev = AA,
-              OneYAbsIOPChangeMean = AB,
-              OneYAbsIOPChangeStdDev = AC,
-              LastPeriodAbsIOPChangeStdDev = LastPeriodAbsIOPChangeStd,
-              LastPeriodEyes = LastPeriodofEyes
-              )
-
-df <- df %>% mutate(subtype = as.factor(
-  ifelse(acuteangleclosure == 'Y', 'acute', 
-         ifelse(MIGsYorN == 'Y', 'MIGS',
-            ifelse(OAG > 50, 'OAG',
-              ifelse(ACG > 50, 'ACG',
-                ifelse(PXG > 50, 'PXG', NA)))))))
-
-df <- df %>% mutate(study.name = paste0(Author, ' (', Year, ')', ifelse(WashOut == 'Y', '*', '')))
-df <- df %>% filter(Author != "Mierzejewski et. al")  # Exclude Mierzejewski studies, they're abstracts and weirdly coded.
-df <- df %>% dplyr::arrange(Year, study.name)
+df <- read.data()
 ```
 
 # Summary plot
@@ -102,7 +80,7 @@ m <- metagen(LastPeriodAbsIOPChangeMean,
 forest(m, comb.fixed = FALSE)
 ```
 
-There's too much missing data to anything useful with this data. 
+There's too much missing data to anything useful without imputation. 
 
 # Analyses with imputation
 
@@ -487,103 +465,6 @@ summary(metagen(imp.LastPeriodIOPChangeMean,
              subset=!is.na(imp.LastPeriodIOPChangeSEM) & MIGsYorN == 'N',
              byvar=subtype))
 
-```
-
-
-# Sanity check data graphically
-
-Check the relationship between RxPreOpMean and s.d.
-```{r}
-ggplot(df, aes(x = RxPreOpMean, y = RxPreOpStdDev)) + 
-  geom_point() + 
-  coord_cartesian(y=c(0, 1.5)) + 
-  stat_function(fun = function(x) sqrt((x - floor(x)) * (1 - (x - floor(x)))), color="gray70")
-```
-
-```{r}
-ggplot(df, aes(x = RxPostOpMean, y = RxPostOpStdDev)) + geom_point() + 
-  stat_function(fun = function(x) sqrt((x - floor(x)) * (1 - (x - floor(x)))), color="gray70")
-```
-
-Check that changes add up.
-
-```{r fig.width=6, fig.height=5}
-ggplot(df, aes(x = SixMoIOPMean - PreOpIOPMean, y = SixMoAbsIOPChangeMean, label = study.name)) + 
-  geom_point() + 
-  coord_cartesian(xlim=c(-10, 0)) + 
-  geom_abline() + 
-  geom_text_repel()
-```
-
-```{r fig.width=6, fig.height=5}
-ggplot(df, aes(x = OneYIOPMean - PreOpIOPMean, y = OneYAbsIOPChangeMean, label = study.name)) + 
-  geom_point() + 
-  coord_cartesian(xlim=c(-10, 0)) + 
-  geom_abline() + 
-  geom_text_repel()
-```
-
-```{r fig.width=6, fig.height=5}
-ggplot(df, aes(x = LastPeriodIOPMean - PreOpIOPMean, y = LastPeriodAbsIOPChangeMean, label = study.name)) + 
-  geom_point() + 
-  coord_cartesian(xlim=c(-25, 0)) + 
-  geom_abline() + 
-  geom_text_repel()
-```
-
-Examine loss at one year.
-
-```{r fig.width=6, fig.height=5}
-ggplot(df, aes(x=PreOpEyes, y=OneYEyes, label=study.name)) + 
-  geom_point(color="red") + 
-  geom_abline() + 
-  geom_text_repel() + coord_cartesian(xlim=c(0, 250), ylim=c(0, 250))
-```
-
-```{r fig.width=6, fig.height=5}
-ggplot(df, aes(x=OneYEyes / PreOpEyes, label=study.name)) + 
-  geom_histogram() + 
-  coord_cartesian()
-```
-
-```{r}
-ggplot(df, aes(x=subtype, fill=MIGsYorN)) + geom_histogram(stat="count", position = 'dodge')
-```
-
-Look at the distribution of eyes and IOP means. 
-
-```{r}
-ggplot(df, aes(x=PreOpEyes, y=PreOpIOPMean)) + geom_point()
-```
-
-Look at number of eyes and standard deviation.
-
-```{r fig.width=11, fig.height=11}
-ggplot(df, aes(x=PreOpEyes, y=PreOpIOPStdDev, label=study.name)) + geom_point(color="red") + geom_text_repel(nudge_x = 5)
-```
-
-```{r fig.width=5, fig.height=5}
-ggplot(df, aes(x=PreOpEyes, y=SixMoAbsIOPChangeStdDev, label=study.name)) + geom_point(color="red") + geom_text_repel(nudge_x = 5)
-```
-
-```{r fig.width=5, fig.height=5}
-ggplot(df, aes(x=PreOpEyes, y=SixMoIOPStdDev, label=study.name)) + geom_point(color="red") + geom_text_repel(nudge_x = 5)
-```
-
-```{r fig.width=5, fig.height=5}
-ggplot(df, aes(x=PreOpEyes, y=OneYAbsIOPChangeStdDev, label=study.name)) + geom_point(color="red") + geom_text_repel(nudge_x = 5)
-```
-
-```{r fig.width=5, fig.height=5}
-ggplot(df, aes(x=PreOpEyes, y=OneYIOPStdDev, label=study.name)) + geom_point(color="red") + geom_text_repel(nudge_x = 5)
-```
-
-```{r fig.width=5, fig.height=5}
-ggplot(df, aes(x=PreOpEyes, y=LastPeriodAbsIOPChangeStdDev, label=study.name)) + geom_point(color="red") + geom_text_repel(nudge_x = 5)
-```
-
-```{r fig.width=5, fig.height=5}
-ggplot(df, aes(x=PreOpEyes, y=SixMoIOPStdDev, label=study.name)) + geom_point(color="red") + geom_text_repel(nudge_x = 5)
 ```
 
 # Some notes on the analysis and the studies
