@@ -11,6 +11,21 @@ source("read-data.R")
 df <- read.data()
 ```
 
+Summary plot.
+
+```{r fig.width = 10, fig.height = 10}
+ggplot(df, aes(x = PreOpEyes, y = 
+                 ifelse(!is.na(LastPeriodIOPMean) & !is.na(PreOpIOPMean), 
+                        LastPeriodIOPMean - PreOpIOPMean,
+                        ifelse(!is.na(LastPeriodAbsIOPChangeMean),
+                               LastPeriodAbsIOPChangeMean,
+                               ifelse(!is.na(OneYAbsIOPChangeMean),
+                                      OneYAbsIOPChangeMean,
+                                      OneYIOPMean - PreOpIOPMean
+                                      )))
+                               , label = study.name, color = subtype)) + geom_point() + ylab('IOP change last period') + geom_text_repel()
+```
+
 Check that changes add up.
 
 ```{r fig.width=6, fig.height=5}
@@ -69,6 +84,16 @@ df %>% filter(is.na(SixMoAbsIOPChangeMean) & !is.na(SixMoIOPMean)) %>%
  * Euswas is retrospective
  * Lam had full follow up except one eye that died after 17 months (lung cancer)
  * Pachimkul was prospective and had full follow up
+
+Generally however, the SixMoEyes annotation is much more likely in prospective studies than in retrospective studies.
+
+Plan:
+
+* Impute PutativePropective from pattern of eye studies
+  * Redo the analysis based on this distinction to see whether it matters much
+  * Annotate pro or retro in the dataset
+  * Hound the N eyes values
+  * Annotate mechanism of exclusion (only included follow through..., or whatever)
 
 ```{r fig.width=6, fig.height=5}
 ggplot(df, aes(x = OneYIOPMean - PreOpIOPMean, y = OneYAbsIOPChangeMean, label = study.name)) + 

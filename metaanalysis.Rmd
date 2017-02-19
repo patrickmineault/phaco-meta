@@ -19,20 +19,6 @@ setwd("~/Documents/phaco")
 df <- read.data()
 ```
 
-# Summary plot
-```{r fig.width = 10, fig.height = 10}
-ggplot(df, aes(x = PreOpEyes, y = 
-                 ifelse(!is.na(LastPeriodIOPMean) & !is.na(PreOpIOPMean), 
-                        LastPeriodIOPMean - PreOpIOPMean,
-                        ifelse(!is.na(LastPeriodAbsIOPChangeMean),
-                               LastPeriodAbsIOPChangeMean,
-                               ifelse(!is.na(OneYAbsIOPChangeMean),
-                                      OneYAbsIOPChangeMean,
-                                      OneYIOPMean - PreOpIOPMean
-                                      )))
-                               , label = study.name, color = subtype)) + geom_point() + ylab('IOP change last period') + geom_text_repel()
-```
-
 
 # Analysis without imputation
 
