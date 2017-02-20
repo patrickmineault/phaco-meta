@@ -1,25 +1,40 @@
+library(testthat)
+library(dplyr)
+
 agg.arms <- function(df, which.arms) {
   # Aggregate different arms according to severity
   df_ <- df[which.arms, ]
+  
+  stopifnot(nrow(df_) == 2) # Currently only support aggregation over 2 arms.
   row <- df_[1, ]# Use the convention that whatever is not specifically aggregated comes from the first row.
   
   # Weighted means.
   wm <- list()
-  wm[['PreOpEyes']] <- c('AgeMean', 'Male', 'Female', 'OAG', 'ACG', 'NTG', 'PXG', 'PreOpIOPMean', 'RxPreOpMean', 'VisualAcuityPreOpMean')
+  wm[['PreOpEyes']] <- c('AgeMean', 'RxPreOpMean', 'PreOpIOPMean', 'VisualAcuityPreOpMean', 'Male', 'Female', 'OAG', 'ACG', 'NTG', 'PXG')
   wm[['SixMoEyes']] <- c('SixMoIOPMean', 'SixMoAbsIOPChangeMean')
   wm[['OneYEyes']] <- c('OneYIOPMean', 'OneYAbsIOPChangeMean')
   wm[['LastPeriodEyes']] <- c('LastPeriodIOPMean', 'LastPeriodAbsIOPChangeMean', 'RxPostOpMean', 'VisualAcuityPostOpMean')
   
   # Weighted standard deviations.
   ws <- list()
-  ws[['PreOpEyes']] <- c('AgeStdDev', 'RxPreOpStdDev', 'PreOpIOPStdDev')
+  ws[['PreOpEyes']] <- c('AgeStdDev', 'RxPreOpStdDev', 'PreOpIOPStdDev', 'VisualAcuityPreOpStdDev')
   ws[['SixMoEyes']] <- c('SixMoIOPStdDev', 'SixMoAbsIOPChangeStdDev')
   ws[['OneYEyes']] <- c('OneYIOPStdDev', 'OneYAbsIOPChangeStdDev')
   ws[['LastPeriodEyes']] <- c('LastPeriodIOPStdDev', 'LastPeriodAbsIOPChangeStdDev', 'RxPostOpStdDev', 'VisualAcuityPostOpStdDev')
   
   for(i in names(wm)) {
+    # Weighted mean: easy.
     row[wm[[i]]] <- sapply(df_[,wm[[i]]], function(x) {sum(x * df_[,i] / sum(df_[,i])) })
-    row[ws[[i]]] <- sapply(df_[,ws[[i]]], function(x) {sqrt(sum(x ** 2 * df_[,i] / sum(df_[,i]))) })
+    
+    # From: http://stats.stackexchange.com/questions/16608/what-is-the-variance-of-the-weighted-mixture-of-two-gaussians
+    r <- sapply(1:length(ws[[i]]), function(j) {
+      sqrt(
+        sum(df_[,i] / sum(df_[,i]) * df_[,ws[[i]][j]] ** 2) +
+        sum(df_[,i] / sum(df_[,i]) * df_[,wm[[i]][j]] ** 2) -
+        sum(df_[,i] / sum(df_[,i]) * df_[,wm[[i]][j]]) ** 2
+      )
+      })
+    row[ws[[i]]] <- r
     row[i] = sum(df_[,i])
   }
   
@@ -59,7 +74,7 @@ fill.absolutes <- function(df) {
   return(df)
 }
 
-read.data <- function() {
+read.data <- function(agg.arms) {
   # Read data from the phaco meta-analysis and fix encodings
   df <- read.csv("phaco.csv", na.strings='-')
   
@@ -103,15 +118,41 @@ read.data <- function() {
   df <- fill.absolutes(df)
 
   # Aggregate some study arms which correspond to different severities
-  nrow.before <- nrow(df)
-  df <- agg.arms(df, regexpr('Mierzejewski', df$study.name) > 0 & df$subtype == 'PXG') 
-  df <- agg.arms(df, regexpr('Lee', df$study.name) > 0 & df$Year == '2016')
-  df <- agg.arms(df, regexpr('Euswas', df$study.name) > 0)
-  
+  if(agg.arms) {
+    nrow.before <- nrow(df)
+    df <- agg.arms(df, regexpr('Mierzejewski', df$study.name) > 0 & df$subtype == 'PXG') 
+    df <- agg.arms(df, regexpr('Lee', df$study.name) > 0 & df$Year == '2016')
+    df <- agg.arms(df, regexpr('Euswas', df$study.name) > 0)
+    stopifnot(nrow.before - nrow(df) == 3)
+  }
+
   # TODO(Patrick): Right now, Vold is classified as prospective, because we don't have all the eye numbers. 
   # That's inaccurate. Resolve that by going through another pass in the data.
   # stopifnot(df[regexpr('Vold', df$study.name) > 0, 'prospective'])
   return(df)
 }
 
-#df <- read.data()
+# Unit test agg.arms.
+df <- read.data(FALSE)
+expect_equal(nrow(df) - 1, nrow())
+tgt <- regexpr('Euswas', df$study.name) > 0
+
+df[tgt,'PreOpEyes'] <- 10
+df[tgt,'PreOpIOPMean'] <- 0
+df[tgt,'PreOpIOPStdDev'] <- 1
+df_ <- agg.arms(df, tgt)
+tgt_ <- regexpr('Euswas', df_$study.name) > 0
+row <- df_[tgt_,]
+expect_equal(row$PreOpEyes, 20)
+expect_equal(row$PreOpIOPMean, 0)
+expect_equal(row$PreOpIOPStdDev, 1)
+
+df[tgt,'PreOpIOPMean'] <- c(0, 10)
+df[tgt,'PreOpIOPStdDev'] <- 0.001
+df_ <- agg.arms(df, tgt)
+tgt_ <- regexpr('Euswas', df_$study.name) > 0
+row <- df_[tgt_,]
+expect_equal(row$PreOpEyes, 20)
+expect_equal(row$PreOpIOPMean, 5, tolerance=1e-5)
+expect_equal(row$PreOpIOPStdDev, 5, tolerance=1e-6)
+
