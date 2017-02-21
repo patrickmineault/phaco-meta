@@ -2,7 +2,7 @@ library(testthat)
 library(dplyr)
 
 agg.arms <- function(df, which.arms) {
-  # Aggregate different arms according to severity
+  # Aggregate different arms of the same study.
   df_ <- df[which.arms, ]
   
   stopifnot(nrow(df_) == 2) # Currently only support aggregation over 2 arms.
@@ -44,7 +44,7 @@ agg.arms <- function(df, which.arms) {
 }
 
 fill.eyes <- function(df) {
-  # Fill in number of eyes.
+  # Fill in number of eyes at each time period where information is missing.
   bad.info <- (((!is.na(df$SixMoAbsIOPChangeMean) | !is.na(df$SixMoIOPMean)) & is.na(df$SixMoEyes)) | 
                ((!is.na(df$OneYAbsIOPChangeMean) | !is.na(df$OneYIOPMean)) & is.na(df$OneYEyes)) | 
                ((!is.na(df$LastPeriodIOPMean) | !is.na(df$LastPeriodAbsIOPChangeMean)) & is.na(df$LastPeriodEyes)))
@@ -63,18 +63,26 @@ fill.eyes <- function(df) {
   return(df)
 }
 
-fill.absolutes <- function(df) {
-  missing.abs <- (!is.na(df$SixMoAbsIOPChangeMean) & is.na(df$SixMoIOPMean)) | 
-                 (!is.na(df$OneYAbsIOPChangeMean) & is.na(df$OneYIOPMean)) |
-                 (!is.na(df$LastPeriodAbsIOPChangeMean) & is.na(df$LastPeriodIOPMean))
-  df[bad.info, 'SixMoEyes'] <- df[bad.info, 'PreOpEyes']
-  df[bad.info, 'OneYEyes'] <- df[bad.info, 'PreOpEyes']
-  df[bad.info, 'LastPeriodEyes'] <- df[bad.info, 'PreOpEyes']
+fill.change <- function(df, rho) {
+  # Fill in information of absolute IOP numbers and relative numbers.
+  missing.abs <- (is.na(df$SixMoAbsIOPChangeMean) & !is.na(df$SixMoIOPMean)) | 
+                 (is.na(df$OneYAbsIOPChangeMean) & !is.na(df$OneYIOPMean)) |
+                 (is.na(df$LastPeriodAbsIOPChangeMean) & !is.na(df$LastPeriodIOPMean))
   
+  df_ <- df[missing.abs,]
+  df_ <- df_ %>% mutate(SixMoAbsIOPChangeMean = SixMoIOPMean - PreOpIOPMean,
+                 OneYAbsIOPChangeMean = OneYIOPMean - PreOpIOPMean,
+                 LastPeriodAbsIOPChangeMean = LastPeriodIOPMean - PreOpIOPMean,
+                 SixMoAbsIOPChangeStdDev = sqrt(PreOpIOPStdDev ** 2 + PreOpIOPStdDev ** 2 - 2 * rho * SixMoIOPStdDev * PreOpIOPStdDev),
+                 OneYAbsIOPChangeStdDev = sqrt(PreOpIOPStdDev ** 2 + OneYIOPStdDev ** 2 - 2 * rho * OneYIOPStdDev * PreOpIOPStdDev),
+                 LastPeriodAbsIOPChangeStdDev = sqrt(PreOpIOPStdDev ** 2 + 
+                                                       LastPeriodIOPStdDev ** 2 - 
+                                                       2 * rho * LastPeriodIOPStdDev * PreOpIOPStdDev))
+  df[missing.abs,] <- df_
   return(df)
 }
 
-read.data <- function(agg.arms) {
+read.data <- function(agg.arms=TRUE, impute.change=TRUE) {
   # Read data from the phaco meta-analysis and fix encodings
   df <- read.csv("phaco.csv", na.strings='-')
   
@@ -91,14 +99,6 @@ read.data <- function(agg.arms) {
                       LastPeriodAbsIOPChangeStdDev = LastPeriodAbsIOPChangeStd,
                       LastPeriodEyes = LastPeriodofEyes
   )
-  
-  # TODO(Patrick): Aggregate the Euswas study, because it's all the same treatment - 
-  # just different severity.
-  # Similarly for Lee et. al 2016.
-  # Aggregate the two PXG Mierzejewski studies
-  # Hayashi et al.: Only
-  # patients who were followed for at least 12 months were
-  # included in the analyses.
   
   df <- df %>% mutate(subtype = as.factor(
     ifelse(acuteangleclosure == 'Y', 'acute', 
@@ -125,6 +125,10 @@ read.data <- function(agg.arms) {
     df <- agg.arms(df, regexpr('Euswas', df$study.name) > 0)
     stopifnot(nrow.before - nrow(df) == 3)
   }
+  
+  if(impute.change) {
+    df <- fill.change(df, rho = 0.35)
+  }
 
   # TODO(Patrick): Right now, Vold is classified as prospective, because we don't have all the eye numbers. 
   # That's inaccurate. Resolve that by going through another pass in the data.
@@ -132,27 +136,38 @@ read.data <- function(agg.arms) {
   return(df)
 }
 
-# Unit test agg.arms.
-df <- read.data(FALSE)
-expect_equal(nrow(df) - 1, nrow())
-tgt <- regexpr('Euswas', df$study.name) > 0
+# Unit test agg.arms, without polluting the global namespace.
+test.fun <- function() {
+  cat("In anonymous test function\n")
+  df <- read.data(FALSE)
+  expect_equal(nrow(df) - 1, nrow(agg.arms(df, regexpr('Euswas', df$study.name) > 0)))
+  tgt <- regexpr('Euswas', df$study.name) > 0
+  
+  df[tgt,'PreOpEyes'] <- 10
+  df[tgt,'PreOpIOPMean'] <- 0
+  df[tgt,'PreOpIOPStdDev'] <- 1
+  df_ <- agg.arms(df, tgt)
+  tgt_ <- regexpr('Euswas', df_$study.name) > 0
+  row <- df_[tgt_,]
+  expect_equal(row$PreOpEyes, 20)
+  expect_equal(row$PreOpIOPMean, 0)
+  expect_equal(row$PreOpIOPStdDev, 1)
+  
+  df[tgt,'PreOpIOPMean'] <- c(0, 10)
+  df[tgt,'PreOpIOPStdDev'] <- 0.001
+  df_ <- agg.arms(df, tgt)
+  tgt_ <- regexpr('Euswas', df_$study.name) > 0
+  row <- df_[tgt_,]
+  expect_equal(row$PreOpEyes, 20)
+  expect_equal(row$PreOpIOPMean, 5, tolerance=1e-5)
+  expect_equal(row$PreOpIOPStdDev, 5, tolerance=1e-6)
+}
 
-df[tgt,'PreOpEyes'] <- 10
-df[tgt,'PreOpIOPMean'] <- 0
-df[tgt,'PreOpIOPStdDev'] <- 1
-df_ <- agg.arms(df, tgt)
-tgt_ <- regexpr('Euswas', df_$study.name) > 0
-row <- df_[tgt_,]
-expect_equal(row$PreOpEyes, 20)
-expect_equal(row$PreOpIOPMean, 0)
-expect_equal(row$PreOpIOPStdDev, 1)
+test.fun()
 
-df[tgt,'PreOpIOPMean'] <- c(0, 10)
-df[tgt,'PreOpIOPStdDev'] <- 0.001
-df_ <- agg.arms(df, tgt)
-tgt_ <- regexpr('Euswas', df_$study.name) > 0
-row <- df_[tgt_,]
-expect_equal(row$PreOpEyes, 20)
-expect_equal(row$PreOpIOPMean, 5, tolerance=1e-5)
-expect_equal(row$PreOpIOPStdDev, 5, tolerance=1e-6)
 
+# TODO: each of these should conditions should not have any studies associated with them.
+# df <- read.data()
+# df[!is.na(df$SixMoAbsIOPChangeMean) & is.na(df$SixMoAbsIOPChangeStdDev),]$study.name
+# df[!is.na(df$OneYAbsIOPChangeMean) & is.na(df$OneYAbsIOPChangeStdDev),]$study.name
+# df[!is.na(df$LastPeriodAbsIOPChangeMean) & is.na(df$LastPeriodAbsIOPChangeStdDev),]$study.name
