@@ -7,6 +7,7 @@ output: pdf_document
 
 ```{r}
 library(ggplot2)
+library(ggrepel)
 source("read-data.R")
 df <- read.data()
 ```

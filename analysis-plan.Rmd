@@ -1,0 +1,55 @@
+---
+title: "Analysis plan"
+output: pdf_document
+---
+
+# Some notes on the analysis and the studies
+  * None of the studies are randomized, except the EAGLE one -- (2016) Azuara-Bianco et al., Lancet
+  * There's no control arm in any of the studies
+  * Main outcome is IOP drop
+    * The older studies are phaco + glaucoma surgery
+    * The new ones are phaco + MIGS - minimally invasive glaucoma surgery
+
+## Slicings to look at
+  * MIGS
+  * Type of glaucoma:
+    * OAG -> open angle glaucoma  ** ~2-3mm **
+    * NTG -> normal tension glaucoma ?
+    * ACG -> angle closure glaucoma  ** known to be effective **
+    * PXG: pseudo-exfoliation ?
+
+## Dimensions to look at - meta-regression
+  * Initial severity (IOP before)
+  * Size of study (number of eyes)
+  * Year
+  
+## Different outcomes
+  * Primary is IOP drop
+    * time points 6 mo, 12 mo, (last time point)  
+    * most important is 12 months
+  * Number of meds
+    * Huge confound, because it's controlled by the doctor
+    * Meds themselves decrease the IOP
+    * A handful of studies use washout pre and post (measuring the IOP without meds) to undo the confounding
+        * EAGLE, Samuelson studies have washout
+        * Lack of washout will have a tendency to decrease the apparent effectiveness of the studies
+    * One med ~= 20% decrease in IOP
+    * One med := decrease in quality of life
+    * RxPostOpMean is at the same time as LastPeriod
+  * (visual acuity but it's kind of obvious)
+  
+## Additional analyses to perform
+
+  * Funnel plot for small / medium large studies
+  * Deal appropriately with multiple arms of same study, e.g. Damji et al., Merz...
+  * Deal with three forms of lossiness:
+    * Absolutes reported, relatives needed
+      * Can patch up using estimate of rho -- sqrt(s_1 ** 2 + s_2 ** 2 - 2 * rho * s_1 * s_2)
+      * Try rho = 0, rho = 0.5
+    * Loss of follow-up
+      * Can deal with by assuming that follow up is either MCAR or worse than MCAR
+      * Try mean_delta = 0, mean_delta = -3, mean_delta = -5
+    * Not all metrics reported for every study
+      * Use mvmeta
+      
+## Write methods
