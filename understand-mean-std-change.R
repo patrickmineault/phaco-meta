@@ -84,3 +84,12 @@ mean(cs)
 #sd(a[,2])
 #sd(a[,1] - a[,2])
 
+#
+aa <- c(rep(1, 6), rep(2, 31), rep(3, 7))
+mean(aa)
+sd(aa)
+
+aa <- c(rep(0, 38), rep(1, 6))
+mean(aa)
+sd(aa)
+

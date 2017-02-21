@@ -102,20 +102,19 @@ read.data <- function(agg.arms=TRUE, impute.change=TRUE) {
   
   df <- df %>% mutate(subtype = as.factor(
     ifelse(acuteangleclosure == 'Y', 'acute', 
-           ifelse(MIGsYorN == 'Y', 'MIGS',
-                  ifelse(OAG > 50, 'OAG',
+           ifelse(MIGsYorN == 'Y' | OAG > 50, 'OAG',
                          ifelse(ACG > 50, 'ACG',
-                                ifelse(PXG > 50, 'PXG', NA)))))))
+                                ifelse(PXG > 50, 'PXG', NA))))))
   
   df <- df %>% mutate(study.name = paste0(Author, ' (', Year, ')', ifelse(WashOut == 'Y', '*', '')))
-  df <- df %>% dplyr::arrange(Year, study.name)
   
   # Fill in number of eyes. As soon as one has missing missingness information, the study will be tagged as retrospective.
   # TODO(Patrick): read pro - retro information directly from CSV once available.
   df <- fill.eyes(df)
-  
-  # Fill in absolutes.
-  df <- fill.absolutes(df)
+
+  if(impute.change) {
+    df <- fill.change(df, rho = 0.35)
+  }  
 
   # Aggregate some study arms which correspond to different severities
   if(agg.arms) {
@@ -126,9 +125,7 @@ read.data <- function(agg.arms=TRUE, impute.change=TRUE) {
     stopifnot(nrow.before - nrow(df) == 3)
   }
   
-  if(impute.change) {
-    df <- fill.change(df, rho = 0.35)
-  }
+  df <- df %>% dplyr::arrange(Year, study.name)
 
   # TODO(Patrick): Right now, Vold is classified as prospective, because we don't have all the eye numbers. 
   # That's inaccurate. Resolve that by going through another pass in the data.
