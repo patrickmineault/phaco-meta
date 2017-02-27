@@ -1,18 +1,29 @@
 ---
 title: "Sanity checks"
-output: pdf_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 # Sanity check data graphically
 
-```{r}
+```{r echo=FALSE, warning=FALSE, message=FALSE}
 library(ggplot2)
 library(ggrepel)
 source("read-data.R")
+```
+
+```{r}
 df <- read.data()
 ```
 
-Summary plot.
+N.B.:
+
+   * Shoji is fine.
+   * Mathalone is fine.
+   * Liu is fine.
+
+# Summary plot.
 
 ```{r fig.width = 10, fig.height = 10}
 ggplot(df, aes(x = PreOpEyes, y = 
@@ -24,91 +35,30 @@ ggplot(df, aes(x = PreOpEyes, y =
                                       OneYAbsIOPChangeMean,
                                       OneYIOPMean - PreOpIOPMean
                                       )))
-                               , label = study.name, color = subtype)) + geom_point() + ylab('IOP change last period') + geom_text_repel()
+                               , label = study.name, color = subtype)) + 
+  geom_point() + ylab('IOP change last period') + geom_text_repel()
 ```
 
 Check that changes add up.
 
 ```{r fig.width=6, fig.height=5}
 ggplot(df, aes(x = SixMoIOPMean - PreOpIOPMean, y = SixMoAbsIOPChangeMean, label = study.name)) + 
-  geom_point() + 
-  coord_cartesian(xlim=c(-10, 0)) + 
   geom_abline() + 
+  geom_point(color="red") + 
   geom_text_repel()
 ```
- * Hayashi et al. rejected patients they couldn't follow for 12 months
- * Yudhasompop was retrospective
- * Iancu has full follow up
- * Shoji had low follow up loss
- * Yalvac was retrospective
- 
-Working model: if there's a delta, and no annotation for number of eyes, it's retrospective.
-Sanity check: the delta should be 0
-
-```{r}
-df %>% mutate(delta.sixMo = SixMoIOPMean - PreOpIOPMean - SixMoAbsIOPChangeMean) %>% 
-  filter(!is.na(delta.sixMo)) %>%
-  select(study.name, subtype, delta.sixMo, PreOpEyes, SixMoEyes)
-```
-
-Also: the number from Iancy don't match up 100%. Likely source: sloppy math.
-
-Let's see what happens at one year.
-
-```{r}
-df %>% mutate(delta.OneY = OneYIOPMean - PreOpIOPMean - OneYAbsIOPChangeMean) %>% 
-  filter(!is.na(delta.OneY)) %>%
-  select(study.name, subtype, delta.OneY, PreOpEyes, OneYEyes)
-```
-
-Problem with assumption: Mathalone doesn't fit this pattern.
-
- * Mathalone is retrospective
- * The measured IOPs are actually for those in the followed-up group (N = 34)
- * TODO(Patrick): fix the coding.
-
-At the last point in the study:
-
-```{r}
-df %>% mutate(delta.LastPeriod = LastPeriodIOPMean - PreOpIOPMean - LastPeriodAbsIOPChangeMean) %>% 
-  filter(!is.na(delta.LastPeriod)) %>%
-  select(study.name, subtype, delta.LastPeriod, PreOpEyes, LastPeriodEyes)
-```
-
-That fits into this general pattern. Now let's look at those with no delta (only absolutes).
-
-```{r}
-df %>% filter(is.na(SixMoAbsIOPChangeMean) & !is.na(SixMoIOPMean)) %>%
-  select(study.name, subtype, PreOpIOPMean, SixMoIOPMean, PreOpEyes, SixMoEyes)
-```
-
- * Euswas is retrospective
- * Lam had full follow up except one eye that died after 17 months (lung cancer)
- * Pachimkul was prospective and had full follow up
-
-Generally however, the SixMoEyes annotation is much more likely in prospective studies than in retrospective studies.
-
-Plan:
-
-* Impute PutativePropective from pattern of eye studies
-  * Redo the analysis based on this distinction to see whether it matters much
-  * Annotate pro or retro in the dataset
-  * Hound the N eyes values
-  * Annotate mechanism of exclusion (only included follow through..., or whatever)
 
 ```{r fig.width=6, fig.height=5}
 ggplot(df, aes(x = OneYIOPMean - PreOpIOPMean, y = OneYAbsIOPChangeMean, label = study.name)) + 
-  geom_point() + 
-  coord_cartesian(xlim=c(-10, 0)) + 
   geom_abline() + 
+  geom_point(color="red") + 
   geom_text_repel()
 ```
 
 ```{r fig.width=6, fig.height=5}
 ggplot(df, aes(x = LastPeriodIOPMean - PreOpIOPMean, y = LastPeriodAbsIOPChangeMean, label = study.name)) + 
-  geom_point() + 
-  coord_cartesian(xlim=c(-25, 0)) + 
   geom_abline() + 
+  geom_point(color="red") + 
   geom_text_repel()
 ```
 
@@ -132,7 +82,7 @@ Examine loss at one year.
 ggplot(df, aes(x=PreOpEyes, y=OneYEyes, label=study.name)) + 
   geom_point(color="red") + 
   geom_abline() + 
-  geom_text_repel() + coord_cartesian(xlim=c(0, 250), ylim=c(0, 250))
+  geom_text_repel() + coord_fixed()
 ```
 
 ```{r fig.width=6, fig.height=5}
@@ -142,7 +92,8 @@ ggplot(df, aes(x=OneYEyes / PreOpEyes, label=study.name)) +
 ```
 
 ```{r}
-ggplot(df, aes(x=subtype, fill=MIGsYorN)) + geom_histogram(stat="count", position = 'dodge')
+ggplot(df, aes(x=subtype, fill=MIGsYorN)) + 
+  geom_histogram(stat="count", position = 'dodge')
 ```
 
 Look at the distribution of eyes and IOP means. 
@@ -154,29 +105,36 @@ ggplot(df, aes(x=PreOpEyes, y=PreOpIOPMean)) + geom_point()
 Look at number of eyes and standard deviation.
 
 ```{r fig.width=11, fig.height=11}
-ggplot(df, aes(x=PreOpEyes, y=PreOpIOPStdDev, label=study.name)) + geom_point(color="red") + geom_text_repel(nudge_x = 5)
+ggplot(df, aes(x=PreOpEyes, y=PreOpIOPStdDev, label=study.name)) + 
+  geom_point(color="red") + geom_text_repel(nudge_x = 5)
 ```
 
 ```{r fig.width=5, fig.height=5}
-ggplot(df, aes(x=PreOpEyes, y=SixMoAbsIOPChangeStdDev, label=study.name)) + geom_point(color="red") + geom_text_repel(nudge_x = 5)
+ggplot(df, aes(x=PreOpEyes, y=SixMoAbsIOPChangeStdDev, label=study.name)) + 
+  geom_point(color="red") + geom_text_repel(nudge_x = 5)
 ```
 
 ```{r fig.width=5, fig.height=5}
-ggplot(df, aes(x=PreOpEyes, y=SixMoIOPStdDev, label=study.name)) + geom_point(color="red") + geom_text_repel(nudge_x = 5)
+ggplot(df, aes(x=PreOpEyes, y=SixMoIOPStdDev, label=study.name)) + 
+  geom_point(color="red") + geom_text_repel(nudge_x = 5)
 ```
 
 ```{r fig.width=5, fig.height=5}
-ggplot(df, aes(x=PreOpEyes, y=OneYAbsIOPChangeStdDev, label=study.name)) + geom_point(color="red") + geom_text_repel(nudge_x = 5)
+ggplot(df, aes(x=PreOpEyes, y=OneYAbsIOPChangeStdDev, label=study.name)) + 
+  geom_point(color="red") + geom_text_repel(nudge_x = 5)
 ```
 
 ```{r fig.width=5, fig.height=5}
-ggplot(df, aes(x=PreOpEyes, y=OneYIOPStdDev, label=study.name)) + geom_point(color="red") + geom_text_repel(nudge_x = 5)
+ggplot(df, aes(x=PreOpEyes, y=OneYIOPStdDev, label=study.name)) + 
+  geom_point(color="red") + geom_text_repel(nudge_x = 5)
 ```
 
 ```{r fig.width=5, fig.height=5}
-ggplot(df, aes(x=PreOpEyes, y=LastPeriodAbsIOPChangeStdDev, label=study.name)) + geom_point(color="red") + geom_text_repel(nudge_x = 5)
+ggplot(df, aes(x=PreOpEyes, y=LastPeriodAbsIOPChangeStdDev, label=study.name)) + 
+  geom_point(color="red") + geom_text_repel(nudge_x = 5)
 ```
 
 ```{r fig.width=5, fig.height=5}
-ggplot(df, aes(x=PreOpEyes, y=SixMoIOPStdDev, label=study.name)) + geom_point(color="red") + geom_text_repel(nudge_x = 5)
+ggplot(df, aes(x=PreOpEyes, y=SixMoIOPStdDev, label=study.name)) + 
+  geom_point(color="red") + geom_text_repel(nudge_x = 5)
 ```
