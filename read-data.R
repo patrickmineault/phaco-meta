@@ -71,12 +71,10 @@ fill.eyes <- function(df) {
     message(paste(weird, '\n'))
   }
   
-  df.weird <- df %>% filter((SixMoEyes > PreOpEyes) | (OneYEyes > PreOpEyes) | (LastPeriodEyes > PreOpEyes) |
-                            (OneYEyes > SixMoEyes) | (LastPeriodEyes > SixMoEyes) | 
-                            (LastPeriodEyes > OneYEyes))
+  df.weird <- df %>% filter((SixMoEyes > PreOpEyes) | (OneYEyes > PreOpEyes) | (LastPeriodEyes > PreOpEyes))
   weird <- unique(df.weird$study.name)
   if(length(weird) > 0) {
-    message("These retrospective studies are gaining eyes per period:")
+    message("These retrospective studies are gaining eyes as the study goes")
     message(paste(weird, '\n'))
   }
   
@@ -113,6 +111,7 @@ read.data <- function(agg.arms=TRUE, impute.change=TRUE, impute.eyes=TRUE) {
   stopifnot(length(grep('\003', read.file)) == 0)
   
   df <- read.csv(fileName, na.strings='-')
+  colnames(df) <- sub('X','', gsub('\\.','', colnames(df)))
   
   df <- df %>% rename(SixMoEyes = Eyes6mo,
                       SixMoIOPMean = MeanIOP6mo,
@@ -135,6 +134,13 @@ read.data <- function(agg.arms=TRUE, impute.change=TRUE, impute.eyes=TRUE) {
                                 ifelse(PXG > 50, 'PXG', NA))))))
   
   df <- df %>% mutate(study.name = paste0(Author, ' (', Year, ')', ifelse(WashOut == 'Y', '*', '')))
+  
+  # Fix a weird bug that happened recently.
+  if(any(df$OneYAbsIOPChangeStdDev < 0, na.rm=TRUE)) {
+    message("Fix the negative SD for this study:")
+    message(paste(unique(df[!is.na(df$OneYAbsIOPChangeStdDev) &  df$OneYAbsIOPChangeStdDev < 0,]$study.name), '\n'))
+    df <- df %>% mutate(OneYAbsIOPChangeStdDev = abs(OneYAbsIOPChangeStdDev))
+  }
   
   # Fill in number of eyes. As soon as one has missing missingness information, the study will be tagged as retrospective.
   # TODO(Patrick): read pro - retro information directly from CSV once available.

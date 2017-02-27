@@ -1,8 +1,6 @@
 ---
 title: "Sanity checks"
-output:
-  pdf_document: default
-  html_document: default
+output: pdf_document
 ---
 
 # Sanity check data graphically
@@ -17,7 +15,7 @@ source("read-data.R")
 df <- read.data()
 ```
 
-N.B.:
+N.B. we manually checked each of these studies and they're fine.
 
    * Shoji is fine.
    * Mathalone is fine.
