@@ -52,11 +52,34 @@ fill.eyes <- function(df) {
   # Some eyes being bad and others not is the worst.
   saveable <- bad.info & (!is.na(df$SixMoEyes) | !is.na(df$OneYEyes) | !is.na(df$LastPeriodEyes))
   if(sum(saveable) > 0) {
-    cat("This study only has some eye number information missing, fix it:\n")
-    cat(df[saveable,]$study.name)
+    message("This study only has some eye number information missing, fix it:")
+    message(df[saveable,]$study.name)
   }
   
-  df[, 'prospective'] <- !bad.info
+  # Compare whether a study has bad eye info data to prospectiveness
+  bad.studies <- df[(df$StudyType == 'Prospective') & bad.info]$study.name
+  if(!is.null(bad.studies)) {
+    message("These prospective studies are missing eye number information:")
+    message(bad.studies)
+  }
+
+  df.weird <- df %>% filter(StudyType == 'Retrospective', 
+                (SixMoEyes < PreOpEyes) | (OneYEyes < PreOpEyes) | (LastPeriodEyes < PreOpEyes))
+  weird <- unique(df.weird$study.name)
+  if(length(weird) > 0) {
+    message("These retrospective studies are losing eyes per period - not impossible, but unusual:")
+    message(paste(weird, '\n'))
+  }
+  
+  df.weird <- df %>% filter((SixMoEyes > PreOpEyes) | (OneYEyes > PreOpEyes) | (LastPeriodEyes > PreOpEyes) |
+                            (OneYEyes > SixMoEyes) | (LastPeriodEyes > SixMoEyes) | 
+                            (LastPeriodEyes > OneYEyes))
+  weird <- unique(df.weird$study.name)
+  if(length(weird) > 0) {
+    message("These retrospective studies are gaining eyes per period:")
+    message(paste(weird, '\n'))
+  }
+  
   df[bad.info, 'SixMoEyes'] <- df[bad.info, 'PreOpEyes']
   df[bad.info, 'OneYEyes'] <- df[bad.info, 'PreOpEyes']
   df[bad.info, 'LastPeriodEyes'] <- df[bad.info, 'PreOpEyes']
@@ -82,9 +105,14 @@ fill.change <- function(df, rho) {
   return(df)
 }
 
-read.data <- function(agg.arms=TRUE, impute.change=TRUE) {
+read.data <- function(agg.arms=TRUE, impute.change=TRUE, impute.eyes=TRUE) {
   # Read data from the phaco meta-analysis and fix encodings
-  df <- read.csv("phaco.csv", na.strings='-')
+  fileName <- 'phaco.csv'
+  read.file <- readChar(fileName, file.info(fileName)$size)
+  # We've had problems before with \003 popping up in the stream out of nowhere.
+  stopifnot(length(grep('\003', read.file)) == 0)
+  
+  df <- read.csv(fileName, na.strings='-')
   
   df <- df %>% rename(SixMoEyes = Eyes6mo,
                       SixMoIOPMean = MeanIOP6mo,
@@ -110,7 +138,9 @@ read.data <- function(agg.arms=TRUE, impute.change=TRUE) {
   
   # Fill in number of eyes. As soon as one has missing missingness information, the study will be tagged as retrospective.
   # TODO(Patrick): read pro - retro information directly from CSV once available.
-  df <- fill.eyes(df)
+  if(impute.eyes) {
+    df <- fill.eyes(df)
+  }
 
   if(impute.change) {
     df <- fill.change(df, rho = 0.35)
@@ -135,7 +165,6 @@ read.data <- function(agg.arms=TRUE, impute.change=TRUE) {
 
 # Unit test agg.arms, without polluting the global namespace.
 test.fun <- function() {
-  cat("In anonymous test function\n")
   df <- read.data(FALSE)
   expect_equal(nrow(df) - 1, nrow(agg.arms(df, regexpr('Euswas', df$study.name) > 0)))
   tgt <- regexpr('Euswas', df$study.name) > 0
