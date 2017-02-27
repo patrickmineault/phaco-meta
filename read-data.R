@@ -81,6 +81,14 @@ fill.eyes <- function(df) {
   df[bad.info, 'SixMoEyes'] <- df[bad.info, 'PreOpEyes']
   df[bad.info, 'OneYEyes'] <- df[bad.info, 'PreOpEyes']
   df[bad.info, 'LastPeriodEyes'] <- df[bad.info, 'PreOpEyes']
+  
+  # Set LastPeriodEyes to whatever the the latest reading is.
+  bad.info <- is.na(df$LastPeriodEyes)
+  df[bad.info, 'LastPeriodEyes'] <- df[bad.info, 'OneYEyes']
+  bad.info <- is.na(df$LastPeriodEyes)
+  df[bad.info, 'LastPeriodEyes'] <- df[bad.info, 'SixMoEyes']
+  
+  
   return(df)
 }
 
@@ -100,6 +108,9 @@ fill.change <- function(df, rho) {
                                                        LastPeriodIOPStdDev ** 2 - 
                                                        2 * rho * LastPeriodIOPStdDev * PreOpIOPStdDev))
   df[missing.abs,] <- df_
+  
+  df <- df %>% mutate(RxChangeMean = RxPostOpMean - RxPreOpMean,
+                      RxChangeStdDev = sqrt(RxPostOpStdDev ** 2 + RxPreOpStdDev ** 2))
   return(df)
 }
 
@@ -150,7 +161,7 @@ read.data <- function(agg.arms=TRUE, impute.change=TRUE, impute.eyes=TRUE) {
 
   if(impute.change) {
     df <- fill.change(df, rho = 0.35)
-  }  
+  }
 
   # Aggregate some study arms which correspond to different severities
   if(agg.arms) {
@@ -167,6 +178,22 @@ read.data <- function(agg.arms=TRUE, impute.change=TRUE, impute.eyes=TRUE) {
   # That's inaccurate. Resolve that by going through another pass in the data.
   # stopifnot(df[regexpr('Vold', df$study.name) > 0, 'prospective'])
   return(df)
+}
+
+filter.data <- function(df, level="all") {
+  if(level == 'all') {
+    return(df)
+  } else if(level == 'prospective') {
+    return(df %>% filter(StudyType == 'Prospective'))
+  } else if(level == 'prospective-nowashout') {
+    return(df %>% filter(StudyType == 'Prospective', WashOut == 'N'))
+  } else if(level == 'nowashout') {
+    return(df %>% filter(WashOut == 'N'))
+  } else if(level == 'low-low') {
+    return(df %>% filter(StudyType == 'Prospective', WashOut == 'N', LastPeriodEyes >= .85 * PreOpEyes))
+  } else {
+    stop("Unknown filtering level.")
+  }
 }
 
 # Unit test agg.arms, without polluting the global namespace.
