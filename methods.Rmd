@@ -1,0 +1,41 @@
+---
+title: "Methods and results"
+output: pdf_document
+---
+
+[Write about data collection procedures, inclusion criteria, data auditing, 
+etc.]
+
+Studies often reported several arms corresponding to different severities, 
+treatments and subtypes. For phacoemulsification studies, we aggregated 
+the data to obtain one arm per glaucoma subtype (ACG, OAG, PXG, acute) per study. 
+For MIGS studies, we aggregated the data to obtain one arm per surgery type 
+(Ab interno, canaloplasty, etc.).
+
+After this step, the total number of arms and eyes per subtype was as follows:
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+library(knitr)
+source('read-data.R')
+df <- read.data()
+```
+
+```{r kable}
+df_ <- df %>% group_by(classification = ifelse(MIGsYorN == 'Y', 'MIGS', as.character(subtype))) %>% 
+  dplyr::summarize(
+    n.total = n(),
+    n.prospective = sum(StudyType == 'Prospective'),
+    n.retrospective = sum(StudyType == 'Retrospective'),
+    PreOpEyes = sum(PreOpEyes),
+    FinalPeriodEyes = sum(LastPeriodEyes))
+df_ <- df_ %>% rbind(., summarize(df_, 
+                                  classification="(all)",
+                                  n.total=sum(n.total),
+                                  n.prospective=sum(n.prospective),
+                                  n.retrospective=sum(n.retrospective),
+                                  PreOpEyes=sum(PreOpEyes),
+                                  FinalPeriodEyes = sum(FinalPeriodEyes)))
+  
+kable(df_)
+```
+
