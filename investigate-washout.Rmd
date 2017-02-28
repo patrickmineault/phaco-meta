@@ -1,0 +1,80 @@
+---
+title: "Investigate washout"
+output: pdf_document
+---
+
+Some studies have washout, which can mean different things for different studies.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(knitr)
+source("read-data.R")
+df <- read.data()
+```
+
+These are all the studies that are labeled as having washout:
+
+
+```{r}
+kable(df %>% filter(WashOut == 'Y') %>% 
+  select(JournalVolumePage, Author, Year, subtype, TypesofMIGSifany))
+```
+
+This study has pre- and post-washout and no measurements without washout. This is
+equivalent to setting the pre and post op meds to 0:
+
+```{r}
+kable(df %>% filter(Washoutbaseline == PreOpIOPMean, !is.na(WashoutIOP)) %>% 
+  select(JournalVolumePage, Author, Year, TypesofMIGSifany))
+```
+
+This study has preop washout and no washout in the post period. Virgin patients
+were enrolled, and had 0 pre-op meds; only after were they put on meds:
+
+```{r}
+kable(df %>% filter(Washoutbaseline == PreOpIOPMean, is.na(WashoutIOP)) %>% 
+  select(JournalVolumePage, Author, Year, TypesofMIGSifany))
+```
+
+These studies had both washout and regular measurements in the pre-period. That 
+tells us about the relationship between meds and IOP:
+
+```{r}
+kable(df %>% filter(Washoutbaseline != PreOpIOPMean) %>% 
+  mutate(mm.Hg.per.med = (Washoutbaseline - PreOpIOPMean)/RxPreOpMean,
+         rel.p = 100*(1-(Washoutbaseline - PreOpIOPMean)/Washoutbaseline),
+         rel.p.drop.per.med = 
+           100*(1-exp(log(rel.p / 100) / RxPreOpMean))) %>%
+  select(Author, Year, PreOpIOPMean, RxPreOpMean, mm.Hg.per.med, 
+         rel.p, rel.p.drop.per.med), digits = 2)
+```
+
+Most commonly, 1 med corresponds to about a 15-20% drop in IOP; or a 4-5 mmHg 
+drop. 
+
+This study has washout only in the last period; we can also use this to estimate
+the drop in IOP per med:
+
+```{r}
+kable(df %>% filter(regexpr("Fea", Author)==TRUE) %>% 
+  mutate(mm.Hg.per.med = (WashoutIOP - LastPeriodIOPMean)/RxPostOpMean,
+         rel.p = 100*(1-(WashoutIOP - LastPeriodIOPMean)/WashoutIOP),
+         rel.p.drop.per.med = 100*(1-exp(log(rel.p / 100) / RxPostOpMean))) %>%
+  select(Author, Year, LastPeriodIOPMean, RxPostOpMean, mm.Hg.per.med, 
+         rel.p, rel.p.drop.per.med), digits = 2)
+```
+
+This study is also in line with the estimate of 4-5mmHg, 15-20% drop in IOP per 
+med.
+
+# Loose ends
+
+  * Neiween: the IOP drop per med -- double check these numbers.
+  
+  * Pfeiffer: I don't understand why the numbers for washout preop don't 
+    match with PreOpIOPmean, implying that we have both washout and natural for
+    preop period, yet they match in the second washout period. If there's only
+    washout in the pre-period, remove the numbers from the second washout period
+    column.
+
+
