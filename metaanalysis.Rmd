@@ -238,7 +238,7 @@ sd(drawn.corrs)
 
 ```
 
-## Joint inferences
+## Correlation among time points
 
 Measure the correlation between different outcomes (IOP at 6 months vs. 12 months).
 
@@ -251,10 +251,69 @@ ggplot(df, aes(x   =SixMoAbsIOPChangeMean,
                ymax= OneYAbsIOPChangeMean + 1.96*OneYAbsIOPChangeStdDev / sqrt(OneYEyes),
                label=study.name,
                color=subtype
-               )) + geom_errorbar() + geom_errorbarh()
+               )) +
+  geom_abline(slope = 1, color="gray70") + 
+  geom_errorbar() + geom_errorbarh() + 
+  coord_fixed(xlim=c(-20, 0), ylim=c(-20,0)) 
 ```
 
 It's very clear that six months and 12 months IOP are highly correlated. 
+
+Similarly for one-year vs. last period:
+
+```{r}
+ggplot(df, aes(y   =LastPeriodAbsIOPChangeMean, 
+               ymin=LastPeriodAbsIOPChangeMean - 1.96*LastPeriodAbsIOPChangeStdDev / sqrt(LastPeriodEyes),
+               ymax=LastPeriodAbsIOPChangeMean + 1.96*LastPeriodAbsIOPChangeStdDev / sqrt(LastPeriodEyes),
+               x   = OneYAbsIOPChangeMean,
+               xmin= OneYAbsIOPChangeMean - 1.96*OneYAbsIOPChangeStdDev / sqrt(OneYEyes),
+               xmax= OneYAbsIOPChangeMean + 1.96*OneYAbsIOPChangeStdDev / sqrt(OneYEyes),
+               label=study.name,
+               color=subtype
+               )) +
+  geom_abline(slope = 1, color="gray70") + 
+  geom_errorbar() + geom_errorbarh() + 
+  coord_fixed(xlim=c(-20, 0), ylim=c(-20,0))
+```
+
+Again, correlations are very high. Present this in another way.
+
+```{r fig.height=7, fig.width=5}
+library(reshape2)
+nd <- melt(df %>% 
+             filter(MIGsYorN == 'N',
+                    1*is.na(SixMoAbsIOPChangeMean) + 
+                    1*is.na(OneYAbsIOPChangeMean) + 
+                    1*is.na(LastPeriodAbsIOPChangeMean) < 2) %>%
+             mutate(SixMoChangeSEM = SixMoAbsIOPChangeStdDev / sqrt(SixMoEyes),
+                    OneYChangeSEM = OneYAbsIOPChangeStdDev / sqrt(OneYEyes),
+                    LastPeriodChangeSEM = LastPeriodAbsIOPChangeStdDev / sqrt(LastPeriodEyes)) %>%
+             select(study.name, subtype,
+                    SixMoAbsIOPChangeMean,
+                    OneYAbsIOPChangeMean,
+                    LastPeriodAbsIOPChangeMean,
+                    SixMoChangeSEM,
+                    OneYChangeSEM,
+                    LastPeriodChangeSEM), id.vars=c("study.name", "subtype"))
+nd$metric <- substr(nd$variable, nchar(as.character(nd$variable)) - 3, nchar(as.character(nd$variable)))
+nd$period <- substr(nd$variable, 0, 4)
+df_ <- dcast(nd, formula = study.name + subtype + period ~ metric)
+df_ <- df_ %>% mutate(period = factor(period, c('SixM', 'OneY', 'Last')),
+                      g = paste(study.name, as.character(subtype))) %>% filter(!is.na(Mean))
+ggplot(df_, aes(y   =Mean, 
+               ymin=Mean - 1.96*eSEM,
+               ymax=Mean + 1.96*eSEM,
+               x   = period,
+               label=study.name,
+               group=g)) +
+  geom_ribbon(alpha=.02) + 
+  geom_line(alpha=.5, aes(color=subtype)) + 
+  coord_cartesian(y=c(-15, 0)) + ggtitle('Time course of IOP per study') + theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+It's remarkable how consistent measurements are between time periods. At most, 
+we find a change of +- 2.5 mm Hg between the first and last period. 
 
 ```{r warning=FALSE}
 df_ <- df %>% filter(subtype=='OAG')
@@ -278,7 +337,12 @@ print(mean(drawn.corrs))
 print(sd(drawn.corrs))
 ```
 
-That's really high. Let's use mvmeta to infer the effect size for all periods together.
+This is also reflected in the correlations - even accounting for noise, the correlations
+are > .9 between month 6 and month 12. 
+
+# Multivariate inference
+
+Let's use `mvmeta` to infer the effect size for all periods together.
 
 ```{r}
 library(mvmeta)
