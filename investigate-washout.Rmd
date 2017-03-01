@@ -156,6 +156,59 @@ for(mmhg.per.med in mmhg.per.meds) {
 }
 ```
 
+# Relative dropoff
+
+**TODO(Patrick)**: Compute SD of the IOP change metric properly.
+
+The previous analysis didn't take into account the fact that the baselines 
+against which we're shaving off IOP are different for different experiments. 
+For the experiments with washout with OAG (Vold and Pfeiffer), we're talking 
+about a 5-7 mm Hg drop against a background of ~25 mmHg. For the other 
+experiments, we're talking about a drop of ~4 against a background of ~20. 
+But we don't believe that meds'd effects are additive - rather, the drop will 
+depend strongly on the baseline. Thus let's put everything in relative terms
+so we're all on the same scale.
+
+```{r fig.width=10, fig.height=11}
+
+drop.per.meds <- c(0, .1)
+for(drop.per.med in drop.per.meds) {
+  df_ <- df %>% 
+    filter(!is.na(RxChangeMean), 
+           df$subtype != "acute", 
+           MIGsYorN == 'N',
+           !is.na(LastPeriodAbsIOPChangeStdDev) | !is.na(OneYAbsIOPChangeStdDev)) %>% 
+    mutate(subtype=factor(subtype),
+           net.effect = log((PreOpIOPMean + ifelse(is.na(LastPeriodAbsIOPChangeMean), OneYAbsIOPChangeMean,  LastPeriodAbsIOPChangeMean))) -
+             log(PreOpIOPMean) -
+             log(1 - drop.per.med) * RxChangeMean * (washout.type %in% c('None', 'Partial')) +
+             log(1 - drop.per.med) * RxPostOpMean * (washout.type %in% c('Pre')),
+           net.sem = .05)
+  m <- metagen(net.effect,
+               net.sem, 
+               study.name, 
+               data=df_,
+               byvar=subtype,
+               n.e=LastPeriodEyes,
+               sm="RR")
+  forest(m, 
+         comb.fixed=FALSE, 
+         digits=2, 
+         digits.se = 2, 
+         overall=FALSE, 
+         leftcols=c("studlab", "TE", "seTE", "n.e"),
+         leftlabs=c("Study", "IOP", "SEM", "eyes"),
+         rightlabs=c("Rel IOP", '95% CI'), 
+         label.left="Favors treatment",
+         label.right="Favors null", at=c(.5, .7, 1, 1.4, 2),
+         smlab="IOP change")
+  grid.text(
+    paste0("Simulated change in IOP in last period (log scale), ", drop.per.med * 100, "% drop per med"), .5, .97, gp=gpar(cex=1.3))
+  print(" ")
+}
+```
+```
+
 # Conclusion
 
 If you take into account the drop in number of meds in each study, you get an 
