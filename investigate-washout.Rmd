@@ -8,6 +8,8 @@ Some studies have washout, which can mean different things for different studies
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 library(knitr)
+library(grid)
+library(meta)
 source("read-data.R")
 df <- read.data()
 ```
@@ -52,6 +54,9 @@ kable(df %>% filter(Washoutbaseline != PreOpIOPMean) %>%
 Most commonly, 1 med corresponds to about a 15-20% drop in IOP; or a 4-5 mmHg 
 drop. 
 
+*Note*: Pfeiffer has washout in the pre-periods and the post-periods. It also 
+has a baseline measurement (with meds).
+
 This study has washout only in the last period; we can also use this to estimate
 the drop in IOP per med:
 
@@ -67,14 +72,101 @@ kable(df %>% filter(regexpr("Fea", Author)==TRUE) %>%
 This study is also in line with the estimate of 4-5mmHg, 15-20% drop in IOP per 
 med.
 
-# Loose ends
+# Study classifications
 
-  * Neiween: the IOP drop per med -- double check these numbers.
+I went back and classified the studies depending on the washout type:
+
+```{r}
+kable(df %>% filter(washout.type != 'None') %>% 
+  select(JournalVolumePage, Author, Year, subtype, TypesofMIGSifany, washout.type))
+```
+
+# Net effect - including IOP and meds
+
+Let's see what happens when we add the IOP drop effect to the Rx drop effects.
+We try different values of the translation value between meds and mmHg drop:
+0, 2, 3, 4, or 5 mm Hg per Rx.
+
+## Last period
+
+```{r fig.width=10, fig.height=10}
+mmhg.per.meds <- c(0, 2, 3, 4, 5)
+for(mmhg.per.med in mmhg.per.meds) {
   
-  * Pfeiffer: I don't understand why the numbers for washout preop don't 
-    match with PreOpIOPmean, implying that we have both washout and natural for
-    preop period, yet they match in the second washout period. If there's only
-    washout in the pre-period, remove the numbers from the second washout period
-    column.
+  df_ <- df %>% 
+    filter(!is.na(RxChangeMean), 
+           df$subtype != "acute", 
+           MIGsYorN == 'N',
+           !is.na(LastPeriodAbsIOPChangeStdDev) | !is.na(OneYAbsIOPChangeStdDev)) %>% 
+    mutate(subtype=factor(subtype),
+           net.effect=ifelse(is.na(LastPeriodAbsIOPChangeMean), OneYAbsIOPChangeMean,  LastPeriodAbsIOPChangeMean) + 
+             mmhg.per.med * RxChangeMean * (washout.type %in% c('None', 'Partial')) +
+             mmhg.per.med * RxPostOpMean * (washout.type %in% c('Pre')),
+           net.sem=2 * ifelse(is.na(LastPeriodAbsIOPChangeStdDev), 
+                              OneYAbsIOPChangeStdDev,  
+                              LastPeriodAbsIOPChangeStdDev) / sqrt(LastPeriodEyes))
+  m <- metagen(net.effect,
+               net.sem, 
+               study.name, 
+               data=df_,
+               byvar=subtype,
+               n.e=LastPeriodEyes)
+  forest(m, 
+         comb.fixed=FALSE, 
+         digits=1, 
+         digits.se = 2, 
+         overall=FALSE, 
+         leftcols=c("studlab", "TE", "seTE", "n.e"),
+         leftlabs=c("Study", "IOP", "SEM", "eyes"))
+  grid.text(
+    paste0("Simulated net change in IOP in last period, ", mmhg.per.med, " mm Hg per med"), .5, .97, gp=gpar(cex=1.3))
+  print(" ")
+}
+```
 
+## One year follow-up
 
+```{r fig.width=10, fig.height=7.75}
+for(mmhg.per.med in mmhg.per.meds) {
+  df_ <- df %>% 
+    filter(!is.na(RxChangeMean), 
+           df$subtype != "acute", 
+           MIGsYorN == 'N',
+           !is.na(OneYAbsIOPChangeStdDev)) %>% 
+    mutate(subtype=factor(subtype),
+           net.effect=OneYAbsIOPChangeMean + 
+           mmhg.per.med * RxChangeMean * (washout.type %in% c('None', 'Partial')) +
+           mmhg.per.med * RxPostOpMean * (washout.type %in% c('Pre')),
+           net.sem=2 * OneYAbsIOPChangeStdDev / sqrt(OneYEyes))
+  m <- metagen(net.effect,
+               net.sem, 
+               study.name, 
+               data=df_,
+               byvar=subtype,
+               n.e=LastPeriodEyes)
+  forest(m, 
+         comb.fixed=FALSE, 
+         digits=1, 
+         digits.se = 2, 
+         overall=FALSE, 
+         leftcols=c("studlab", "TE", "seTE", "n.e"),
+         leftlabs=c("Study", "IOP", "SEM", "eyes"))
+  grid.text(paste0("Simulated net change in IOP at one year, ", mmhg.per.med, " mm Hg per med"), .5, .97, gp=gpar(cex=1.3))
+  print(" ")
+}
+```
+
+# Conclusion
+
+If you take into account the drop in number of meds in each study, you get an 
+additional ~1mmHg drop in the OAG group. That's a net effect around 4 mmHg drop at
+12 months and in the last period: quite a bit larger than the uncorrected
+estimates we had previously.
+
+There's another source of bias we can't correct for here: in some studies, less
+potent medicines with better side effect profiles might have replaced more 
+potent medicines in the post period, in response to better control of IOP after 
+surgery. That would be measured as a net change of 0 between RxPreOp and 
+RxPostOp, and it would result in an apparent increase in IOP, even though that's
+a net positive for the patient. I'll leave it to the clinician to determine how
+likely this is.

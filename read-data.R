@@ -144,7 +144,25 @@ read.data <- function(agg.arms=TRUE, impute.change=TRUE, impute.eyes=TRUE) {
                          ifelse(ACG > 50, 'ACG',
                                 ifelse(PXG > 50, 'PXG', NA))))))
   
-  df <- df %>% mutate(study.name = paste0(Author, ' (', Year, ')', ifelse(WashOut == 'Y', '*', '')))
+  # See investigate-washout.Rmd for an explanation of these labels and a 
+  # verification that the labels are correct.
+  df <- df %>% mutate(washout.type = 
+                        ifelse(is.na(Washoutbaseline) & is.na(WashoutIOP), 'None',
+                          ifelse(Washoutbaseline == PreOpIOPMean & is.na(WashoutIOP), 'Pre',
+                            ifelse(!is.na(Washoutbaseline) & !is.na(WashoutIOP), 'Both', 'Partial'))))
+  
+  washout.labels <- c(None = '',
+                         Pre = '**',
+                         Both = '*',
+                         Partial = '')
+  
+  # To fix Pfeiffer and any other similar studies.
+  switcheroo <- with(df, washout.type == 'Both' & Washoutbaseline > PreOpIOPMean)
+  expect_equal(sum(switcheroo), 2)
+  df[switcheroo, 'PreOpIOPMean'] <- df[switcheroo, 'Washoutbaseline']
+  df[switcheroo, 'PreOpIOPStdDev'] <- df[switcheroo, 'BaselinewashoutSD']
+  
+  df <- df %>% mutate(study.name = paste0(Author, ' (', Year, ')', washout.labels[washout.type]))
   
   # Fix a weird bug that happened recently.
   if(any(df$OneYAbsIOPChangeStdDev < 0, na.rm=TRUE)) {
@@ -186,11 +204,13 @@ filter.data <- function(df, level="all") {
   } else if(level == 'prospective') {
     return(df %>% filter(StudyType == 'Prospective'))
   } else if(level == 'prospective-nowashout') {
-    return(df %>% filter(StudyType == 'Prospective', WashOut == 'N'))
+    return(df %>% filter(StudyType == 'Prospective', washout.type %in% c('None', 'Partial')))
   } else if(level == 'nowashout') {
-    return(df %>% filter(WashOut == 'N'))
+    return(df %>% filter(washout.type %in% c('None', 'Partial')))
   } else if(level == 'low-low') {
-    return(df %>% filter(StudyType == 'Prospective', WashOut == 'N', LastPeriodEyes >= .85 * PreOpEyes))
+    return(df %>% filter(StudyType == 'Prospective', 
+                         washout.type %in% c('None', 'Partial'), 
+                         LastPeriodEyes >= .85 * PreOpEyes))
   } else {
     stop("Unknown filtering level.")
   }
@@ -220,6 +240,11 @@ test.fun <- function() {
   expect_equal(row$PreOpEyes, 20)
   expect_equal(row$PreOpIOPMean, 5, tolerance=1e-5)
   expect_equal(row$PreOpIOPStdDev, 5, tolerance=1e-6)
+  
+  df <- read.data()
+  expect_equal(nrow(df %>% filter(washout.type != 'None', 
+                                  (Washoutbaseline < PreOpIOPMean) | 
+                                    (WashoutIOP < OneYIOPMean))), 0)
 }
 
 test.fun()

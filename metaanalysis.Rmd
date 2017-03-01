@@ -42,7 +42,8 @@ forest(m,
        digits=1, 
        digits.se = 2, 
        overall=FALSE, 
-       leftcols=c("studlab", "TE", "seTE", "n.e"))
+       leftcols=c("studlab", "TE", "seTE", "n.e"),
+       leftlabs=c("Study", "ΔIOP", "SEM", "eyes"))
 ```
 
 ## 12-month follow up
@@ -62,7 +63,8 @@ forest(m,
        digits=1, 
        digits.se = 2, 
        overall=FALSE, 
-       leftcols=c("studlab", "TE", "seTE", "n.e"))
+       leftcols=c("studlab", "TE", "seTE", "n.e"),
+       leftlabs=c("Study", "ΔIOP", "SEM", "eyes"))
 ```
 
 ## Last period
@@ -82,12 +84,13 @@ forest(m,
        digits=1, 
        digits.se = 2, 
        overall=FALSE, 
-       leftcols=c("studlab", "TE", "seTE", "n.e"))
+       leftcols=c("studlab", "TE", "seTE", "n.e"),
+       leftlabs=c("Study", "ΔIOP", "SEM", "eyes"))
 ```
 
 ## MIGS
 
-```{r fig.width=10.5, fig.height=5.5}
+```{r fig.width=10.5, fig.height=6}
 df_ <- df %>% 
   filter(!is.na(LastPeriodAbsIOPChangeMean), subtype != "acute", MIGsYorN == 'Y') %>% 
   mutate(subtype=factor(subtype)) %>% dplyr::arrange(TypesofMIGSifany, Year)
@@ -156,7 +159,7 @@ df_ <- df %>%
          df$subtype != "acute", MIGsYorN == 'N') %>% 
   mutate(subtype=factor(subtype))
 m <- metagen(RxChangeMean,
-             sqrt(RxPostOpStdDev** 2 + RxPreOpStdDev ** 2) / sqrt(LastPeriodEyes), 
+             RxChangeStdDev / sqrt(LastPeriodEyes), 
              study.name, 
              data=df_,
              byvar=subtype,
@@ -181,8 +184,7 @@ How is IOP drop related to change in meds? Two hypotheses:
 So which is it?
 
 ```{r}
-df_ <- df %>% mutate(RxChangeMean = RxPostOpMean - RxPreOpMean,
-                     RxChangeSEM  = sqrt(1 / ifelse(is.na(LastPeriodEyes), OneYEyes, LastPeriodEyes)),
+df_ <- df %>% mutate(RxChangeSEM  = RxChangeStdDev / sqrt(LastPeriodEyes),
                      LastPeriodAbsIOPChangeSEM = LastPeriodAbsIOPChangeStdDev / sqrt(LastPeriodEyes))
 
 ggplot(df_, aes(x  =LastPeriodAbsIOPChangeMean, 
@@ -207,7 +209,7 @@ ggplot(df_ %>% filter(subtype=='OAG' & MIGsYorN == 'N'),
            )) + geom_errorbar(alpha=.2) + geom_errorbarh(alpha=.2) + ggtitle('OAG only') + geom_text_repel(segment.alpha = 0)
 ```
 
-There is an apparent positive correlation between the two effect sizes: studies with larger drops in IOP also tend to see larger drops in Rx. This is clearer when we reject the studies with washout.
+There is an apparent positive correlation between the two effect sizes: studies with larger drops in IOP also tend to see larger drops in Rx. 
 
 ```{r warning=FALSE}
 draw.corr <- function(x.mean, x.sem, y.mean, y.sem) {
@@ -221,8 +223,8 @@ df_ <- df %>% filter(subtype=='OAG', MIGsYorN == 'N')
 drawn.corrs <- with(df_, replicate(n = 100, 
                                    draw.corr(LastPeriodAbsIOPChangeMean, 
                                              LastPeriodAbsIOPChangeStdDev / sqrt(LastPeriodEyes), 
-                                             RxPostOpMean - RxPreOpMean, 
-                                             1 / sqrt(LastPeriodEyes))))
+                                             RxChangeMean, 
+                                             RxChangeStdDev / sqrt(LastPeriodEyes))))
 mean(drawn.corrs)
 sd(drawn.corrs)
 
@@ -231,12 +233,15 @@ df_ <- filter.data(df, 'nowashout') %>% filter(subtype=='OAG', MIGsYorN == 'N')
 drawn.corrs <- with(df_, replicate(n = 100, 
                                   draw.corr(LastPeriodAbsIOPChangeMean, 
                                              LastPeriodAbsIOPChangeStdDev / sqrt(LastPeriodEyes), 
-                                             RxPostOpMean - RxPreOpMean, 
-                                             1 / sqrt(LastPeriodEyes))))
+                                             RxChangeMean, 
+                                             RxChangeStdDev / sqrt(LastPeriodEyes))))
 mean(drawn.corrs)
 sd(drawn.corrs)
 
 ```
+
+However, this effect goes away when we focus on the studies which don't have 
+washout.
 
 ## Correlation among time points
 
