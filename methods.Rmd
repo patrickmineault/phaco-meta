@@ -3,6 +3,8 @@ title: "Methods and results"
 output: pdf_document
 ---
 
+Follow the procedures in [PRISMA 2009](http://prisma-statement.org/documents/PRISMA%202009%20checklist.pdf).
+
 [Write about data collection procedures, inclusion criteria, data auditing, 
 etc.]
 
