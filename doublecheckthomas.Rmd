@@ -1,0 +1,32 @@
+---
+title: "Double-check Thomas et al. (2016)"
+author: "Patrick Mineault"
+date: "March 1, 2017"
+output:
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Print out a table equivalent to Table 1 of:
+
+> Lowering of Intraocular Pressure After Phacoemulsification in Primary Open-Angle and Angle-Closure Glaucoma:
+> A Bayesian Analysis
+> Ravi Thomas, MD, FRANZCO,*† Mark Walland, FRANZCO,‡
+> Aleysha Thomas, BSc,§ and Kerrie Mengersen, PhD§
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(knitr)
+source("read-data.R")
+df <- read.data()
+```
+
+```{r}
+df_ <- df %>% filter(subtype == 'OAG', MIGsYorN == 'N') %>%
+  select(Author, Year, JournalVolumePage, StudyType, PreOpEyes, TimeofLastPostOp, PreOpIOPMean, PreOpIOPStdDev, LastPeriodIOPMean, LastPeriodIOPStdDev, LastPeriodAbsIOPChangeMean, LastPeriodAbsIOPChangeStdDev)
+kable(df_)
+```
+
+I audit our data against their in [this Sheet](https://docs.google.com/spreadsheets/d/1HPjNJD7RT7iZsyLMlpXdsyGMUQxV7Mij6kOGfcPHihY/edit?usp=sharing).
