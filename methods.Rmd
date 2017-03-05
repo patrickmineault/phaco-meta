@@ -3,6 +3,7 @@ title: "Methods and results"
 output:
   pdf_document: 
     latex_engine: xelatex
+geometry: margin=0.5in
 ---
 
 > TODO(Patrick): think more deeply about regression to the mean and this will 
@@ -83,10 +84,12 @@ median of the correlations in the studies reporting the full set of metrics
 (r = 0.35).
 
 ```{r message=FALSE}
-df <- read.data(impute.change = FALSE)
+df <- read.data(impute.change = FALSE) %>% filter(subtype != 'acute')
 rs <- with(df, (PreOpIOPStdDev ** 2 + LastPeriodIOPStdDev ** 2 - LastPeriodAbsIOPChangeStdDev ** 2) / (PreOpIOPStdDev * LastPeriodIOPStdDev)/2)
 quantile(rs, .5, na.rm=TRUE)
 ```
+  
+> TODO(Patrick): Update this number (.35) as we gather the final data.
   
 Many studies reported several arms corresponding to different severities, 
 treatments and subtypes. For phacoemulsification studies, we aggregated 
@@ -95,7 +98,8 @@ per study.
 
 After this step, the total number of arms and eyes per subtype was as follows:
 
-```{r}
+```{r message=FALSE}
+df <- read.data()
 df_ <- df %>% filter(!is.na(LastPeriodAbsIOPChangeMean)) %>% group_by(subtype) %>% 
   dplyr::summarize(
     n.total = n(),
