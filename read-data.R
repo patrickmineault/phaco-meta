@@ -114,7 +114,11 @@ fill.change <- function(df, rho) {
   return(df)
 }
 
-read.data <- function(agg.arms=TRUE, impute.change=TRUE, impute.eyes=TRUE) {
+read.data <- function(agg.arms=TRUE, 
+                      impute.change=TRUE, 
+                      impute.eyes=TRUE, 
+                      drop.migs=TRUE,
+                      fill.last=TRUE) {
   # Read data from the phaco meta-analysis and fix encodings
   fileName <- 'phaco.csv'
   read.file <- readChar(fileName, file.info(fileName)$size)
@@ -171,8 +175,7 @@ read.data <- function(agg.arms=TRUE, impute.change=TRUE, impute.eyes=TRUE) {
     df <- df %>% mutate(OneYAbsIOPChangeStdDev = abs(OneYAbsIOPChangeStdDev))
   }
   
-  # Fill in number of eyes. As soon as one has missing missingness information, the study will be tagged as retrospective.
-  # TODO(Patrick): read pro - retro information directly from CSV once available.
+  # Fill in number of eyes. 
   if(impute.eyes) {
     df <- fill.eyes(df)
   }
@@ -190,11 +193,43 @@ read.data <- function(agg.arms=TRUE, impute.change=TRUE, impute.eyes=TRUE) {
     stopifnot(nrow.before - nrow(df) == 3)
   }
   
+  if(fill.last) {
+    # Where not otherwise specified, fill in the data for last follow-up with 
+    # the 12 month data.
+    missing.data <- is.na(df$LastPeriodAbsIOPChangeMean)
+    
+    # Fill in last follow-up data.
+    df[missing.data,]$LastPeriodIOPMean <- df[missing.data,]$OneYIOPMean
+    df[missing.data,]$LastPeriodIOPStdDev <- df[missing.data,]$OneYIOPStdDev
+    df[missing.data,]$LastPeriodAbsIOPChangeMean <- df[missing.data,]$OneYAbsIOPChangeMean
+    df[missing.data,]$LastPeriodAbsIOPChangeStdDev <- df[missing.data,]$OneYAbsIOPChangeStdDev
+    df[missing.data,]$LastPeriodEyes <- df[missing.data,]$OneYEyes
+    df[missing.data,]$TimeofLastPostOp <- "12 mo"
+  }
+  
   df <- df %>% dplyr::arrange(Year, study.name)
+  
+  if(drop.migs) {
+    # Originally, the paper included the comparison of different MIGS 
+    # treatments, but we didn't the space and time to do it properly, so rather
+    # than do it sloppily we decided to leave it for a new paper.
+    df <- df %>% filter(MIGsYorN == 'N')
+  }
+  
+  # Fix Shams et al., which is 7.2 months follow up
+  missing.data <- regexpr('Shams', df$study.name) > 0
+  df[missing.data,]$SixMoIOPMean <- df[missing.data,]$LastPeriodIOPMean
+  df[missing.data,]$SixMoIOPStdDev <- df[missing.data,]$LastPeriodIOPStdDev
+  df[missing.data,]$SixMoAbsIOPChangeMean <- df[missing.data,]$LastPeriodAbsIOPChangeMean
+  df[missing.data,]$SixMoAbsIOPChangeStdDev <- df[missing.data,]$LastPeriodAbsIOPChangeStdDev
+  df[missing.data,]$SixMoEyes <- df[missing.data,]$LastPeriodEyes
+  
+  df[missing.data,]$LastPeriodIOPMean <- NA
+  df[missing.data,]$LastPeriodIOPStdDev <- NA
+  df[missing.data,]$LastPeriodAbsIOPChangeMean <- NA
+  df[missing.data,]$LastPeriodAbsIOPChangeStdDev <- NA
+  df[missing.data,]$LastPeriodEyes <- NA
 
-  # TODO(Patrick): Right now, Vold is classified as prospective, because we don't have all the eye numbers. 
-  # That's inaccurate. Resolve that by going through another pass in the data.
-  # stopifnot(df[regexpr('Vold', df$study.name) > 0, 'prospective'])
   return(df)
 }
 
@@ -214,6 +249,12 @@ filter.data <- function(df, level="all") {
   } else {
     stop("Unknown filtering level.")
   }
+}
+
+read.column.names <- function() {
+  fileName <- 'phaco.csv'
+  df <- read.csv(fileName, na.strings='-', check.names = FALSE)
+  return(colnames(df))
 }
 
 # Unit test agg.arms, without polluting the global namespace.
@@ -251,7 +292,7 @@ test.fun()
 
 
 # TODO: each of these should conditions should not have any studies associated with them.
-# df <- read.data()
-# df[!is.na(df$SixMoAbsIOPChangeMean) & is.na(df$SixMoAbsIOPChangeStdDev),]$study.name
-# df[!is.na(df$OneYAbsIOPChangeMean) & is.na(df$OneYAbsIOPChangeStdDev),]$study.name
-# df[!is.na(df$LastPeriodAbsIOPChangeMean) & is.na(df$LastPeriodAbsIOPChangeStdDev),]$study.name
+df <- read.data()
+df[!is.na(df$SixMoAbsIOPChangeMean) & is.na(df$SixMoAbsIOPChangeStdDev),]$study.name
+df[!is.na(df$OneYAbsIOPChangeMean) & is.na(df$OneYAbsIOPChangeStdDev),]$study.name
+df[!is.na(df$LastPeriodAbsIOPChangeMean) & is.na(df$LastPeriodAbsIOPChangeStdDev),]$study.name

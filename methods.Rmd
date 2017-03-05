@@ -3,16 +3,86 @@ title: "Methods and results"
 output: pdf_document
 ---
 
-Follow the procedures in [PRISMA 2009](http://prisma-statement.org/documents/PRISMA%202009%20checklist.pdf).
+> TODO(Patrick): think more deeply about regression to the mean and this will 
+affect our claims. Reference:
+https://www.reviewofoptometry.com/ce/considerations-in-iop-measurement
 
-[Write about data collection procedures, inclusion criteria, data auditing, 
-etc.]
+Follow the procedures in [PRISMA
+2009](http://prisma-statement.org/documents/PRISMA%202009%20checklist.pdf).
 
-Studies often reported several arms corresponding to different severities, 
+# 10. Data extraction
+
+An undergraduate assistant manually extracted data from the tables of the
+identified studies. In one case where the data of interest was not cited in the
+main study (ref Liu et al.), the data was extracted from figures using a
+graphical data extraction tool (WebPlotDigitizer,
+http://arohatgi.info/WebPlotDigitizer/; ref Cochrane Review).
+
+The data tables were spot-checked by M.M. against the primary studies. Data was
+also audited for self-consistency by P.M. -- e.g. ensuring that differences in
+IOP post-surgery were consistent with pre- and post-surgery IOP measurements, 
+that number of eyes tracked did not increase through follow-up, etc. The full
+extent of these automated checks (unit tests) can be viewed at (ref github 
+link).
+
+The data for OAG studies was also cross-verified against Table 1 of Thomas et al
+(ref). We rejected one study from meta-analysis because the SD numbers could not
+be relied on (reported range too large for reported SD; ref Jacobi et al.). The
+full extracted data can be accessed at (ref Github link).
+
+# 11 & 13. Data items & summary measures
+
+We extracted the following columns from the primary sources:
+
+```{r}
+source("read-data.R")
+extracted.data <- read.column.names()
+kable(data.frame(extracted.data))
+```
+
+> TODO(Marisse): transform this to a table, group similar measurements together.
+
+The main metric of interest for our meta-analysis was the IOP change at the 
+final follow-up period (12 months or longer). In complementary analyses, we 
+performed meta-analyses separately for 6 month, 12 month, and > 12 month 
+follow-ups; the results differed by less than 1 mm per period. and in a 
+complementary multivariate meta-analysis we found even these small differences 
+shrinked further when taking into account missing follow-up and serial 
+correlation.
+
+> TODO(Marisse): decide whether you want to include the information in that last
+paragraph in the methods or in the results.
+
+Some studies used washout in at least some time periods to measure the effect of
+surgery separately from the effect of medication. When both pre- and
+post-surgery IOP were reported with washout, these are the values we used (refs
+Pfeiffer, Vold); this is indicated by an asterisk in the main results. When
+washout was used in only some periods, we used non-washouted values across time
+periods, for consistency. The only exception was (ref Azuara−Blanco 2016), where
+IOP was measured with washout in the pre-period but not in the post period, due
+to study design. We indicate this study with a double asterisk.
+
+Many studies did not report IOP drop directly, but rather only absolute IOP in
+the pre-period and at the follow-up period. Assuming full follow-up, the IOP
+drop is simply the difference of these measurements, while the SD ($\sigma$) of
+the IOP drop is estimated by:
+
+$\sigma_{drop}^2 = \sigma_{pre}^2 + \sigma_{post}^2 - 2 r \sigma_{pre} \sigma_{post}$
+
+$r$, the correlation between the pre-and-post measurements, was set to the 
+median of the correlations in the studies reporting the full set of metrics 
+(r = 0.35).
+
+```{r}
+df <- read.data(impute.change = FALSE)
+rs <- with(df, (PreOpIOPStdDev ** 2 + LastPeriodIOPStdDev ** 2 - LastPeriodAbsIOPChangeStdDev ** 2) / (PreOpIOPStdDev * LastPeriodIOPStdDev)/2)
+quantile(rs, .5, na.rm=TRUE)
+```
+  
+Many studies reported several arms corresponding to different severities, 
 treatments and subtypes. For phacoemulsification studies, we aggregated 
-the data to obtain one arm per glaucoma subtype (ACG, OAG, PXG, acute) per study. 
-For MIGS studies, we aggregated the data to obtain one arm per surgery type 
-(Ab interno, canaloplasty, etc.).
+the data to obtain one arm per glaucoma subtype (ACG, OAG, PXG, acute) 
+per study. 
 
 After this step, the total number of arms and eyes per subtype was as follows:
 
@@ -23,15 +93,16 @@ df <- read.data()
 ```
 
 ```{r kable}
-df_ <- df %>% group_by(classification = ifelse(MIGsYorN == 'Y', 'MIGS', as.character(subtype))) %>% 
+df_ <- df %>% filter(!is.na(LastPeriodAbsIOPChangeMean)) %>% group_by(subtype) %>% 
   dplyr::summarize(
     n.total = n(),
     n.prospective = sum(StudyType == 'Prospective'),
     n.retrospective = sum(StudyType == 'Retrospective'),
     PreOpEyes = sum(PreOpEyes),
     FinalPeriodEyes = sum(LastPeriodEyes))
+
 df_ <- df_ %>% rbind(., summarize(df_, 
-                                  classification="(all)",
+                                  subtype="(all)",
                                   n.total=sum(n.total),
                                   n.prospective=sum(n.prospective),
                                   n.retrospective=sum(n.retrospective),
@@ -41,3 +112,44 @@ df_ <- df_ %>% rbind(., summarize(df_,
 kable(df_)
 ```
 
+The full list of studies is as follow:
+
+```{r kable}
+df_ <- df %>% filter(!is.na(LastPeriodAbsIOPChangeMean)) %>% 
+  dplyr::select(
+    study.name,
+    Year,
+    StudyType,
+    subtype,
+    PreOpEyes,
+    PreOpIOPMean,
+    PreOpIOPStdDev,
+    TimeofLastPostOp,
+    LastPeriodEyes,
+    LastPeriodIOPMean,
+    LastPeriodIOPStdDev,
+    LastPeriodAbsIOPChangeMean,
+    LastPeriodAbsIOPChangeStdDev) %>% arrange(subtype, Year, study.name)
+kable(df_, digits = 1)
+```
+
+# 12. Risk of bias
+
+A major source of bias is loss of follow-up. Retrospective and prospective 
+studies have different potential patterns of lossiness. Most retrospective 
+studies reported the IOP before and after surgery *for the same set of eyes*,
+which leaves the possibility that some eyes received surgery and were lost in 
+follow up, which is very hard to quantify. Prospective studies are less problematic 
+in this regard, as the number of eyes lost in follow-up is known.  
+
+In the main text, we present the results of the analysis under a missing 
+completely at random (MCAR) assumption, which does do not attempt to correct for 
+these biases. In a supplementary analysis, we verify the robustness of the results
+by considering the results of using just the retrospective or prospective studies.
+
+We also consider how our results would change if the eyes lost to follow up 
+showed worse patterns of results. We consider what would happen if these eyes
+had 0 change in IOP compared to the pre-period, or a 5 mm Hg increase compared
+to the observed eyes.
+
+> TODO(Patrick): add in these results.
