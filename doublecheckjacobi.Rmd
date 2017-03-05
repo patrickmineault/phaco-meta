@@ -1,0 +1,40 @@
+---
+title: "Double check Jacobi"
+author: "Patrick Mineault"
+date: "March 3, 2017"
+output: html_document
+---
+
+```{r}
+library(MASS)
+r = 1
+draws = mvrnorm(n=43, mu=c(40.5, 17.8), Sigma=matrix(c(7.6**2, 7.6*3.4*r, 7.6*3.4*r, 3.4**2), ncol=2))
+n <- 10
+delta <- 100
+draws[1:n,] <- c(10 + rep(40.5, n), 10 + rep(17.8, n))
+plot(draws[,1], draws[,2])
+mean(draws[,2] - draws[,1])
+sd(draws[,2] - draws[,1])
+sd(draws[,2])
+sd(draws[,1])
+min(draws[1])
+
+aa <- 7.9
+bb <- 3.9
+cc <- 4.2
+
+(aa ** 2 + bb ** 2 - cc ** 2) / 2 / (aa * bb)
+
+sd(c(14, 47, rep(22.70 - .38, 41)))
+mean(c(10, 25, rep(17.8, 41)))
+```
+
+These numbers imply that:
+
+  * it's impossible to get that SD for the postop IOP with that range
+  * it's impossible to get that SD for the postop IOP based on the SDs of the 
+    pre and post-op IOP, even with perfect correlation
+
+See also [this sheet](https://docs.google.com/spreadsheets/d/1GAk17IsQLAPCaDcCOlyMdpP50TwOTW4c5o5JA73NFgI/edit?usp=sharing) where I assemble the numbers in the table in the paper.
+    
+I'm tempted to reject this paper because of this sloppiness.
