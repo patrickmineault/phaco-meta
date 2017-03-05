@@ -1,0 +1,21 @@
+---
+title: "Unicode test"
+author: "Patrick Mineault"
+output: 
+  pdf_document: 
+    latex_engine: xelatex
+---
+
+TL;DR: the secret combination of invocations to get unicode within grid graphics
+in RMarkdown is to use xelatex as the latex engine and the dev="cairo_pdf" for 
+a given block.
+
+$\Delta$ = Δ
+
+```{r dev="cairo_pdf"}
+library(grid)
+vp <- viewport(x=0.5,y=0.5,width=0.9, height=0.9)
+pushViewport(vp)
+grid.text("Δ")
+popViewport()
+```
