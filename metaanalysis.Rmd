@@ -7,9 +7,11 @@ header-includes:
 output: 
   pdf_document:
     latex_engine: xelatex
+    toc: yes
 ---
 
 ```{r echo=FALSE, include=FALSE, message=FALSE} 
+library(grid)
 library(tidyverse)
 library(meta)
 library(ggrepel)
@@ -532,6 +534,67 @@ forest(m,
        digits.se = 2, 
        overall=FALSE, 
        leftcols=c("studlab", "TE", "seTE", "n.e"))
+```
+
+# Sensitivity to missingness
+
+Simulate what the results would look like if there was no effect in the eyes 
+lost to follow up ($\Delta IOP = 0$).
+
+```{r fig.width=10, fig.height=8, dev="cairo_pdf", message=FALSE}
+meta.analysis.with.sensitivity <- function(missingness='zero') {
+  df <- read.data()
+  df <- filter.data(df, 'prospective')
+  
+  df_ <- df %>% 
+    filter(!is.na(LastPeriodAbsIOPChangeMean), subtype != "acute") %>% 
+    mutate(subtype=factor(subtype))
+  
+  # Simulate a 0 effect in the unobserved fraction.
+  df.missing <- df_
+  if(missingness == 'zero') {
+    # Zero out.
+    df.missing <- df.missing %>% mutate(LastPeriodEyes = PreOpEyes - LastPeriodEyes,
+                          LastPeriodAbsIOPChangeMean = 0)
+  } else {
+    # Add 5 mm Hg to each missing eye.
+    df.missing <- df.missing %>% mutate(LastPeriodEyes = PreOpEyes - LastPeriodEyes,
+                          LastPeriodAbsIOPChangeMean = LastPeriodAbsIOPChangeMean + 5)
+  }
+  
+  df_ <- rbind(df_, df.missing)
+  # Aggregate two by two
+  for(i in seq(nrow(df.missing), 1)) {
+    idx <- rep(FALSE, nrow(df_))
+    idx[i] <- TRUE
+    idx[i*2] <- TRUE
+    df_ <- agg.arms(df_, idx)
+  }
+  
+  df_ <- df_ %>% dplyr::arrange(Year, study.name)
+  
+  m <- metagen(LastPeriodAbsIOPChangeMean, 
+               LastPeriodAbsIOPChangeStdDev / sqrt(LastPeriodEyes), 
+               study.name, 
+               data=df_,
+               byvar=subtype,
+               n.e=LastPeriodEyes)
+  forest(m, 
+         comb.fixed=FALSE, 
+         digits=1, 
+         digits.se = 2, 
+         overall=FALSE, 
+         leftcols=c("studlab", "TE", "seTE", "n.e"),
+         leftlabs=c("Study", "ΔIOP", "SE", "eyes"))
+}
+
+meta.analysis.with.sensitivity()
+grid.text(paste0("Simulated net change IOP when ΔIOP = 0 in eyes lost to follow up"), .5, .97, gp=gpar(cex=1.3))
+```
+
+```{r fig.width=10, fig.height=8, dev="cairo_pdf", message=FALSE}
+meta.analysis.with.sensitivity('five')
+grid.text(paste0("Simulated net change IOP when ΔIOP = 5 mm Hg higher in eyes lost to follow up"), .5, .97, gp=gpar(cex=1.3))
 ```
 
 # MIGS

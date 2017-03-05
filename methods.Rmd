@@ -1,6 +1,8 @@
 ---
 title: "Methods and results"
-output: pdf_document
+output:
+  pdf_document: 
+    latex_engine: xelatex
 ---
 
 > TODO(Patrick): think more deeply about regression to the mean and this will 
@@ -34,8 +36,15 @@ full extracted data can be accessed at (ref Github link).
 
 We extracted the following columns from the primary sources:
 
-```{r}
+```{r echo=FALSE, warning=FALSE, message=FALSE}
 source("read-data.R")
+library(knitr)
+source('read-data.R')
+df <- read.data()
+```
+
+
+```{r message=FALSE}
 extracted.data <- read.column.names()
 kable(data.frame(extracted.data))
 ```
@@ -73,7 +82,7 @@ $r$, the correlation between the pre-and-post measurements, was set to the
 median of the correlations in the studies reporting the full set of metrics 
 (r = 0.35).
 
-```{r}
+```{r message=FALSE}
 df <- read.data(impute.change = FALSE)
 rs <- with(df, (PreOpIOPStdDev ** 2 + LastPeriodIOPStdDev ** 2 - LastPeriodAbsIOPChangeStdDev ** 2) / (PreOpIOPStdDev * LastPeriodIOPStdDev)/2)
 quantile(rs, .5, na.rm=TRUE)
@@ -86,13 +95,7 @@ per study.
 
 After this step, the total number of arms and eyes per subtype was as follows:
 
-```{r echo=FALSE, warning=FALSE, message=FALSE}
-library(knitr)
-source('read-data.R')
-df <- read.data()
-```
-
-```{r kable}
+```{r}
 df_ <- df %>% filter(!is.na(LastPeriodAbsIOPChangeMean)) %>% group_by(subtype) %>% 
   dplyr::summarize(
     n.total = n(),
@@ -114,26 +117,36 @@ kable(df_)
 
 The full list of studies is as follow:
 
-```{r kable}
+```{r}
 df_ <- df %>% filter(!is.na(LastPeriodAbsIOPChangeMean)) %>% 
+  arrange(subtype, Year, study.name) %>% 
   dplyr::select(
     study.name,
     Year,
     StudyType,
     subtype,
-    PreOpEyes,
-    PreOpIOPMean,
-    PreOpIOPStdDev,
-    TimeofLastPostOp,
-    LastPeriodEyes,
-    LastPeriodIOPMean,
-    LastPeriodIOPStdDev,
-    LastPeriodAbsIOPChangeMean,
-    LastPeriodAbsIOPChangeStdDev) %>% arrange(subtype, Year, study.name)
+    PreEyes=PreOpEyes,
+    PreIOPMean=PreOpIOPMean,
+    PreIOPSD=PreOpIOPStdDev,
+    TimeofLastPostOp) 
 kable(df_, digits = 1)
 ```
 
-# 12. Risk of bias
+```{r}
+df_ <- df %>% filter(!is.na(LastPeriodAbsIOPChangeMean)) %>% 
+  arrange(subtype, Year, study.name) %>% 
+  dplyr::select(
+    study.name,
+    PostEyes=LastPeriodEyes,
+    PostIOPMean=LastPeriodIOPMean,
+    PostIOPSD=LastPeriodIOPStdDev,
+    PostIOPChangeMean=LastPeriodAbsIOPChangeMean,
+    PostIOPChangeSD=LastPeriodAbsIOPChangeStdDev) 
+kable(df_, digits = 1)
+```
+
+
+# 12 & 15. Risk of bias
 
 A major source of bias is loss of follow-up. Retrospective and prospective 
 studies have different potential patterns of lossiness. Most retrospective 
@@ -144,12 +157,59 @@ in this regard, as the number of eyes lost in follow-up is known.
 
 In the main text, we present the results of the analysis under a missing 
 completely at random (MCAR) assumption, which does do not attempt to correct for 
-these biases. In a supplementary analysis, we verify the robustness of the results
-by considering the results of using just the retrospective or prospective studies.
+these biases. 
 
-We also consider how our results would change if the eyes lost to follow up 
-showed worse patterns of results. We consider what would happen if these eyes
-had 0 change in IOP compared to the pre-period, or a 5 mm Hg increase compared
-to the observed eyes.
+In a supplementary analysis, we verify the robustness of the results by 
+considering the results of including just the prospective studies, which are 
+less subject to bias. We also consider how our results would change if the eyes 
+lost to follow up showed overall worse outcomes than in the measured eyes. We
+consider what would happen if these eyes had 0 change in IOP compared to the
+pre-period, or a 5 mm Hg increase compared to the observed eyes. However,
+because the loss of follow-up in the prospective group was rather mild (table
+below), the results were not very sensitive to this form of loss, except in the
+case of PXG, where only two prospective studies have been performed, and they 
+both had significant loss in follow up.
 
-> TODO(Patrick): add in these results.
+```{r message=FALSE}
+df <- read.data()
+df <- filter.data(df, 'prospective')
+
+df_ <- df %>% filter(subtype != 'acute', !is.na(LastPeriodEyes))
+frac <- (df_$PreOpEyes - df_$LastPeriodEyes)/ df_$PreOpEyes
+frac.range <- data.frame("fraction with loss"=mean(frac > 0),
+           "mean loss"=mean(frac),
+           "SD loss"=sd(frac),
+           "min loss"=min(frac),
+           "max loss"=max(frac), 
+           check.names=FALSE)
+kable(frac.range, digits=2)
+```
+
+Small studies often show larger magnitude effects because of the so-called file 
+drawer problem: the tendency of negative results from small-scale studies to 
+never get published (ref). We used standard funnel plot based methods to verify 
+this was the case. In fact, the data shows an unusual, opposite trend: the
+larger studies tended to show the largest effects, an effect we attribute to
+washout. We discuss this in detail in the main results.
+
+A final, important source of bias is the lack of a true control group. It would
+very difficult to create a true control -- sham surgery -- and unethical to not
+subject patients to any treatments. 
+
+> TODO(Marisse): Find the best estimate for the average change in IOP over a
+year for patients that have glaucoma and don't change medications. This could be
+from a meta-analysis of the change in IOP in placebo arms of drug trials, for
+instance. I thought I saw something like that in a paper 
+
+> TODO(Marisse): think of other ways we could address this confound
+
+# 14. Synthesis of results
+
+We used standard random-effects meta-analysis for continuous outcomes (ref 
+`meta` package in R; ref book) throughout the text. We used multivariate 
+meta-analysis (package `mvmeta`; ref book) to summarize the temporal trend in 
+IOP.
+
+# 15. Additional analyses
+
+> TODO(Patrick): explain the washout and medication stuff.
