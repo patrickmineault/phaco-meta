@@ -25,7 +25,7 @@ df <- filter.data(df)
 
 # Analysis of full dataset
 
-## Main analysis: $\ge 12$ month follow up
+## Main analysis: 12-month+ follow up
 
 ```{r fig.width=10, fig.height=10, dev="cairo_pdf"}
 df_ <- df %>% 
@@ -227,7 +227,8 @@ forest(m,
 Measure the correlation between different outcomes (IOP at 6 months vs. 12 months).
 
 ```{r}
-ggplot(df, aes(x   =SixMoAbsIOPChangeMean, 
+ggplot(df %>% filter(subtype != 'acute') %>% mutate(subtype = factor(subtype)), 
+       aes(x   =SixMoAbsIOPChangeMean, 
                xmin=SixMoAbsIOPChangeMean - 1.96*SixMoAbsIOPChangeStdDev / sqrt(SixMoEyes),
                xmax=SixMoAbsIOPChangeMean + 1.96*SixMoAbsIOPChangeStdDev / sqrt(SixMoEyes),
                y   = OneYAbsIOPChangeMean,
@@ -237,8 +238,11 @@ ggplot(df, aes(x   =SixMoAbsIOPChangeMean,
                color=subtype
                )) +
   geom_abline(slope = 1, color="gray70") + 
-  geom_errorbar() + geom_errorbarh() + 
-  coord_fixed(xlim=c(-20, 0), ylim=c(-20,0)) 
+  geom_errorbar() + 
+  geom_errorbarh() + 
+  xlab('ΔIOP at 6 months') +
+  ylab('ΔIOP at one year') +
+  coord_fixed(xlim=c(-18, 0), ylim=c(-18,0)) 
 ```
 
 It's very clear that six months and 12 months IOP are highly correlated. 
@@ -266,6 +270,7 @@ Again, correlations are very high. Present this in another way.
 library(reshape2)
 nd <- melt(df %>% 
              filter(MIGsYorN == 'N',
+                    subtype != 'acute',
                     1*is.na(SixMoAbsIOPChangeMean) + 
                     1*is.na(OneYAbsIOPChangeMean) + 
                     1*is.na(LastPeriodAbsIOPChangeMean) < 2) %>%
@@ -284,7 +289,7 @@ nd$period <- substr(nd$variable, 0, 4)
 df_ <- dcast(nd, formula = study.name + subtype + period ~ metric)
 df_ <- df_ %>% mutate(period = factor(period, c('SixM', 'OneY', 'Last')),
                       g = paste(study.name, as.character(subtype))) %>% filter(!is.na(Mean))
-ggplot(df_, aes(y   =Mean, 
+ggplot(df_, aes(y  =Mean, 
                ymin=Mean - 1.96*eSEM,
                ymax=Mean + 1.96*eSEM,
                x   = period,
@@ -604,7 +609,7 @@ aren't very similar to each other, and we don't use the information in their
 control arms. We can do a much better job through, for example, network
 meta-analysis, which we plan to do in a future paper.
 
-```{r fig.width=10.5, fig.height=6, dev="cairo_pdf"}
+```{r fig.width=10.5, fig.height=8, dev="cairo_pdf"}
 df <- read.data(drop.migs = FALSE)
 df_ <- df %>% 
   filter(!is.na(LastPeriodAbsIOPChangeMean), subtype != "acute", MIGsYorN == 'Y') %>% 

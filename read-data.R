@@ -166,7 +166,9 @@ read.data <- function(agg.arms=TRUE,
   df[switcheroo, 'PreOpIOPMean'] <- df[switcheroo, 'Washoutbaseline']
   df[switcheroo, 'PreOpIOPStdDev'] <- df[switcheroo, 'BaselinewashoutSD']
   
-  df <- df %>% mutate(study.name = paste0(Author, ' (', Year, ')', washout.labels[washout.type]))
+  df <- df %>% 
+    mutate(hayashi.symbol = ifelse(regexpr("Hayashi", df$Author) > 0, "†", ""),
+           study.name = paste0(Author, ' (', Year, ')', washout.labels[washout.type], hayashi.symbol))
   
   # Fix a weird bug that happened recently.
   if(any(df$OneYAbsIOPChangeStdDev < 0, na.rm=TRUE)) {
