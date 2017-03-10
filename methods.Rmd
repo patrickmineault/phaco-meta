@@ -6,32 +6,27 @@ output:
 geometry: margin=0.5in
 ---
 
-> TODO(Patrick): think more deeply about regression to the mean and this will 
-affect our claims. Reference:
-https://www.reviewofoptometry.com/ce/considerations-in-iop-measurement
-
 Follow the procedures in [PRISMA
 2009](http://prisma-statement.org/documents/PRISMA%202009%20checklist.pdf).
 
 # 10. Data extraction
 
 An undergraduate assistant manually extracted data from the tables of the
-identified studies. In one case where the data of interest was not cited in the
-main study (ref Liu et al.), the data was extracted from figures using a
-graphical data extraction tool (WebPlotDigitizer,
-http://arohatgi.info/WebPlotDigitizer/; ref Cochrane Review).
+identified studies. In three cases where the data of interest was not cited in -
+the IOP measurements and medication numbers in (ref Liu et al.), and the 
+medication numbers in (ref Hayashi, Tham 2013), the data was extracted from 
+figures using a graphical data extraction tool (WebPlotDigitizer,
+http://arohatgi.info/WebPlotDigitizer/; ref Cochrane https://www.ncbi.nlm.nih.gov/pubmed/26780258).
 
 The data tables were spot-checked by M.M. against the primary studies. Data was
 also audited for self-consistency by P.M. -- e.g. ensuring that differences in
 IOP post-surgery were consistent with pre- and post-surgery IOP measurements, 
 that number of eyes tracked did not increase through follow-up, etc. The full
-extent of these automated checks (unit tests) can be viewed at (ref github 
+extent of these automated checks can be viewed at (ref github 
 link).
 
 The data for OAG studies was also cross-verified against Table 1 of Thomas et al
-(ref). We rejected one study from meta-analysis because the SD numbers could not
-be relied on (reported range too large for reported SD; ref Jacobi et al.). The
-full extracted data can be accessed at (ref Github link).
+(ref). The full extracted data can be accessed at (ref Github link).
 
 # 11 & 13. Data items & summary measures
 
@@ -40,7 +35,6 @@ We extracted the following columns from the primary sources:
 ```{r echo=FALSE, warning=FALSE, message=FALSE}
 source("read-data.R")
 library(knitr)
-source('read-data.R')
 df <- read.data()
 ```
 
@@ -55,42 +49,46 @@ kable(data.frame(extracted.data))
 The main metric of interest for our meta-analysis was the IOP change at the 
 final follow-up period (12 months or longer). In complementary analyses, we 
 performed meta-analyses separately for 6 month, 12 month, and > 12 month 
-follow-ups; the results differed by less than 1 mm per period. and in a 
-complementary multivariate meta-analysis we found even these small differences 
-shrinked further when taking into account missing follow-up and serial 
-correlation.
+follow-ups. When the final period of follow up was not equal for every patient,
+we put in the 6-month follow up bin if it was less than 12 months, on average,
+and in the > 12 month bin it was more than 12 months.
 
-> TODO(Marisse): decide whether you want to include the information in that last
-paragraph in the methods or in the results.
+We also analyzed the change in number of medications between the pre-
+period and final follow-up.
+
+## Aggregation and cleaning
 
 Some studies used washout in at least some time periods to measure the effect of
 surgery separately from the effect of medication. When both pre- and
-post-surgery IOP were reported with washout, these are the values we used (refs
+post-surgery IOP were reported with washout, we used the washed out IOPs (refs
 Pfeiffer, Vold); this is indicated by an asterisk in the main results. When
-washout was used in only some periods, we used non-washouted values across time
+washout was used in only some periods, we used non-washout values across time
 periods, for consistency. The only exception was (ref Azuara−Blanco 2016), where
 IOP was measured with washout in the pre-period but not in the post period, due
 to study design. We indicate this study with a double asterisk.
 
-Many studies did not report IOP drop directly, but rather only absolute IOP in
-the pre-period and at the follow-up period. Assuming full follow-up, the IOP
-drop is simply the difference of these measurements, while the SD ($\sigma$) of
-the IOP drop is estimated by:
+Many studies did not report IOP change directly, but rather only absolute IOP in
+the pre-period and at the follow-up period. Assuming follow-ups are missing 
+completely at random (MCAR), the IOP change can be estimated simply by the difference 
+of these measurements, while the SD ($\sigma$) of the IOP change is estimated by:
 
 $\sigma_{drop}^2 = \sigma_{pre}^2 + \sigma_{post}^2 - 2 r \sigma_{pre} \sigma_{post}$
 
 $r$, the correlation between the pre-and-post measurements, was set to the 
 median of the correlations in the studies reporting the full set of metrics 
-(r = 0.35).
+(r = 0.28).
 
 ```{r message=FALSE}
 df <- read.data(impute.change = FALSE) %>% filter(subtype != 'acute')
 rs <- with(df, (PreOpIOPStdDev ** 2 + LastPeriodIOPStdDev ** 2 - LastPeriodAbsIOPChangeStdDev ** 2) / (PreOpIOPStdDev * LastPeriodIOPStdDev)/2)
 quantile(rs, .5, na.rm=TRUE)
 ```
-  
-> TODO(Patrick): Update this number (.35) as we gather the final data.
-  
+
+The reported SD of the change in IOP in one study (Jacobi et al. 2002) implied a 
+pre-post correlation larger than 1; since the reported range of the IOP change was
+also incompatible with the reported range, we replaced this SD with one 
+estimated from the reported pre- and post-surgery IOP SDs.
+
 Many studies reported several arms corresponding to different severities, 
 treatments and subtypes. For phacoemulsification studies, we aggregated 
 the data to obtain one arm per glaucoma subtype (ACG, OAG, PXG, acute) 
@@ -99,7 +97,7 @@ per study.
 After this step, the total number of arms and eyes per subtype was as follows:
 
 ```{r message=FALSE}
-df <- read.data()
+df <- read.data(fill.last=FALSE)
 df_ <- df %>% filter(!is.na(LastPeriodAbsIOPChangeMean)) %>% group_by(subtype) %>% 
   dplyr::summarize(
     n.total = n(),
@@ -115,8 +113,24 @@ df_ <- df_ %>% rbind(., summarize(df_,
                                   n.retrospective=sum(n.retrospective),
                                   PreOpEyes=sum(PreOpEyes),
                                   FinalPeriodEyes = sum(FinalPeriodEyes)))
-  
-kable(df_)
+kable(df_, caption = "Number of arms with 12 month+ follow up")
+```
+
+```{r}
+df_ <- df %>% group_by(subtype) %>% 
+  dplyr::summarize(
+    n.total = n(),
+    n.prospective = sum(StudyType == 'Prospective'),
+    n.retrospective = sum(StudyType == 'Retrospective'),
+    PreOpEyes = sum(PreOpEyes))
+
+df_ <- df_ %>% rbind(., summarize(df_, 
+                                  subtype="(all)",
+                                  n.total=sum(n.total),
+                                  n.prospective=sum(n.prospective),
+                                  n.retrospective=sum(n.retrospective),
+                                  PreOpEyes=sum(PreOpEyes)))
+kable(df_, caption = "Number of arms across all studies")
 ```
 
 The full list of studies is as follow:
@@ -156,8 +170,8 @@ A major source of bias is loss of follow-up. Retrospective and prospective
 studies have different potential patterns of lossiness. Most retrospective 
 studies reported the IOP before and after surgery *for the same set of eyes*,
 which leaves the possibility that some eyes received surgery and were lost in 
-follow up, which is very hard to quantify. Prospective studies are less problematic 
-in this regard, as the number of eyes lost in follow-up is known.  
+follow up, which is very hard to quantify. Prospective studies are less 
+problematic in this regard, as the number of eyes lost in follow-up is known.  
 
 In the main text, we present the results of the analysis under a missing 
 completely at random (MCAR) assumption, which does do not attempt to correct for 
@@ -165,13 +179,18 @@ these biases.
 
 In a supplementary analysis, we verify the robustness of the results by 
 considering the results of including just the prospective studies, which are 
-less subject to bias. We also consider how our results would change if the eyes 
-lost to follow up showed overall worse outcomes than in the measured eyes. We
-consider what would happen if these eyes had 0 change in IOP compared to the
-pre-period, or a 5 mm Hg increase compared to the observed eyes. However,
-because the loss of follow-up in the prospective group was rather mild (table
+less subject to bias. We also perform a sensitivity analysis, where we estimate
+how our results would change under an MNAR (missing not at random) scenario 
+where eyes with the worst outcomes are lost to follow up.
+
+Specifically, we consider what would happen if the eyes lost in follow-up had 0
+change in IOP compared to the pre-period. We also considered what would happen 
+if the change in IOP in the group lost in follow-up was 5 mm Hg higher than in
+the observed group (ref Metaanalysis an introduction with R).
+
+Because the loss of follow-up in the prospective group was rather mild (table
 below), the results were not very sensitive to this form of loss, except in the
-case of PXG, where only two prospective studies have been performed, and they 
+case of PXG, where only two prospective studies have been performed, and they
 both had significant loss in follow up.
 
 ```{r message=FALSE}
@@ -191,29 +210,86 @@ kable(frac.range, digits=2)
 
 Small studies often show larger magnitude effects because of the so-called file 
 drawer problem: the tendency of negative results from small-scale studies to 
-never get published (ref). We used standard funnel plot based methods to verify 
-this was the case. In fact, the data shows an unusual, opposite trend: the
-larger studies tended to show the largest effects, an effect we attribute to
-washout. We discuss this in detail in the main results.
+never get published (ref meta-analysis book). We used standard funnel plot based
+methods to check if this was the case. In fact, the data showed an unusual,
+opposite trend: the larger studies tended to show the largest effects, an effect
+we attribute to washout. We discuss this in detail in the main results.
 
 A final, important source of bias is the lack of a true control group. It would
 very difficult to create a true control -- sham surgery -- and unethical to not
-subject patients to any treatments. 
-
-> TODO(Marisse): Find the best estimate for the average change in IOP over a
-year for patients that have glaucoma and don't change medications. This could be
-from a meta-analysis of the change in IOP in placebo arms of drug trials, for
-instance. I thought I saw something like that in a paper 
-
-> TODO(Marisse): think of other ways we could address this confound
+subject patients to any treatments. We addressed this concern by aggregating 
+information from Stage II trials and from prevention studies to get a very coarse
+estimate of how large this effect might be (refs) - the estimates range 
+from 1 to 2.5 mm Hg. This estimate is necessarily very crude, because the  
+test populations are not comparable (ref improper metaanalysis in glaucoma), but 
+such an estimate, no matter how coarse, is important. In particular, the estimate
+should be taken into account when interpreting the extant data, and also for 
+preparing a power analysis in future studies.
 
 # 14. Synthesis of results
 
 We used standard random-effects meta-analysis for continuous outcomes (ref 
-`meta` package in R; ref book) throughout the text. We used multivariate 
-meta-analysis (package `mvmeta`; ref book) to summarize the temporal trend in 
-IOP.
+`meta` package in R; ref book) throughout the text. 
 
 # 15. Additional analyses
 
-> TODO(Patrick): explain the washout and medication stuff.
+In our main metaanalysis, we estimated the change in IOP that followed 
+phacoemulsification. An ideal analysis would instead estimate the *causal* 
+effect of surgery. The causal effect of surgery is the change in IOP following
+the intervention, holding all other variables fixed, compared to what would have
+happened if we did not perform surgery (ref causal impact). In a complementary
+analysis, we estimated this causal effect.
+
+Following surgery, glaucoma medications are frequently adjusted; an ideal 
+experiment would hold medications fixed. Studies with washout in the pre- and
+post- periods - temporary interruption of medication - offer an excellent
+approximation to the ideal fixed medication experiment.
+
+For the studies without washout, we estimated a net effect of surgery: the sum
+of the measured effect in IOP and the expected change on IOP if medications has
+been fixed to their number in the pre-surgery period. Because we did not know
+the exact mix of medications used in each study, we used timolol as our
+reference. Timolol is the most commonly prescribed glaucoma medication, and in a
+recent meta-analysis, it showed an efficacy close to the mean of all tested
+medications (3.8 mmHg; ref).
+
+In practice, if a study without washout reported a change in IOP of -2 mmHg, and
+a mean decrease in numbers of meds of 1 in the post-period, we attributed a net
+decrease of 5.8 mm Hg in IOP. For a study with washout in the pre- and post- 
+periods, the attributed net change in IOP was simply the reported change in IOP.
+
+To this net effect, we must subtract the change in IOP that would have occured
+in a hypothetical control arm. As outlined in the *Risk of bias* section, we do
+not have great estimates of this quantity. In the graph for this analysis, we
+indicate our best guess for this quantity (-2 mmHg), based on the extant data.
+
+We believe this is a conservative estimate of the net causal impact of surgery for 
+three reasons:
+
+  * Baseline: in studies without washout, the starting baseline was generally
+  lower because of the use of drugs to control IOP. It's likely that surgery
+  would show a larger effect on IOP when starting from a larger baseline. 
+  * Substitution of drugs: studies did not report the mix of medications they
+  used on patients. It's possible that more efficacious drugs that were less
+  well tolerated were substituted for less powerful drugs with better side
+  effect profiles once IOP was relatively well controlled.
+  * Intent-to-treat: in the real world, adherence for preventive drugs can be
+  low. Surgery does not suffer such an adherence problem, so its net relative
+  effect can be amplified compared to meds in an intent-to-treat analysis.
+  
+# Other things to discuss
+
+  * Very little change across time
+  * Sensitivity to loss of follow up
+  * Ideal experiment design based on review of literature
+  * For PXG, there's high loss of follow up, and few good studies -- more 
+    research is necessary.
+
+# Additional references
+
+  * Borenstein et al. (2009), Introduction to Meta-Analysis. [[Link]](https://www.amazon.com/Introduction-Meta-Analysis-Michael-Borenstein/dp/0470057246).
+  * Schwarzer et al. (2015), Meta-analysis with R. [[Link]](http://www.springer.com/gp/book/9783319214153).
+  * Kadic et al. (2016), Extracting data from figures with software was faster, with higher interrater reliability than manual extraction. [[Link]](https://www.ncbi.nlm.nih.gov/pubmed/26780258).
+  * Li & Dickersin (2013), Citation of Previous Meta-analyses on the Same Topic: A Clue to Perpetuation of Incorrect Methods? [[Link]](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4730544/).
+  * Li et al. (2016), Comparative Effectiveness of First-Line Medications for Primary Open-Angle Glaucoma: A Systematic Review and Network Meta-analysis. [[Link]](https://www.ncbi.nlm.nih.gov/pubmed/26526633).
+  * Imbens & Rubin (2015), Causal Inference for Statistics, Social, and Biomedical Sciences: An Introduction. [[Link]](https://www.amazon.com/Causal-Inference-Statistics-Biomedical-Sciences/dp/0521885884).

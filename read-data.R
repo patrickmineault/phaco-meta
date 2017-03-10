@@ -82,7 +82,7 @@ fill.eyes <- function(df) {
   df[bad.info, 'OneYEyes'] <- df[bad.info, 'PreOpEyes']
   df[bad.info, 'LastPeriodEyes'] <- df[bad.info, 'PreOpEyes']
   
-  # Set LastPeriodEyes to whatever the the latest reading is.
+  # Set LastPeriodEyes to whatever the latest reading is.
   bad.info <- is.na(df$LastPeriodEyes)
   df[bad.info, 'LastPeriodEyes'] <- df[bad.info, 'OneYEyes']
   bad.info <- is.na(df$LastPeriodEyes)
@@ -148,6 +148,12 @@ read.data <- function(agg.arms=TRUE,
                          ifelse(ACG > 50, 'ACG',
                                 ifelse(PXG > 50, 'PXG', NA))))))
   
+  # For Jacobi (2002), the error bars for change in IOP imply an r > 1. 
+  # Fix this by stripping out that data.
+  jacobi <- with(df, Year == '2002' & regexpr('Jacobi', Author))
+  expect_equal(sum(jacobi), 1)
+  df[jacobi, c('LastPeriodAbsIOPChangeMean', 'LastPeriodAbsIOPChangeStdDev')] <- NA
+  
   # See investigate-washout.Rmd for an explanation of these labels and a 
   # verification that the labels are correct.
   df <- df %>% mutate(washout.type = 
@@ -160,22 +166,19 @@ read.data <- function(agg.arms=TRUE,
                          Both = '*',
                          Partial = '')
   
-  # To fix Pfeiffer and any other similar studies.
+  # To fix Pfeiffer and any other similar studies with partial washout.
   switcheroo <- with(df, washout.type == 'Both' & Washoutbaseline > PreOpIOPMean)
   expect_equal(sum(switcheroo), 2)
   df[switcheroo, 'PreOpIOPMean'] <- df[switcheroo, 'Washoutbaseline']
   df[switcheroo, 'PreOpIOPStdDev'] <- df[switcheroo, 'BaselinewashoutSD']
   
+  # Compile study names with dagger and such.
   df <- df %>% 
     mutate(hayashi.symbol = ifelse(regexpr("Hayashi", df$Author) > 0, "†", ""),
            study.name = paste0(Author, ' (', Year, ')', washout.labels[washout.type], hayashi.symbol))
   
-  # Fix a weird bug that happened recently.
-  if(any(df$OneYAbsIOPChangeStdDev < 0, na.rm=TRUE)) {
-    message("Fix the negative SD for this study:")
-    message(paste(unique(df[!is.na(df$OneYAbsIOPChangeStdDev) &  df$OneYAbsIOPChangeStdDev < 0,]$study.name), '\n'))
-    df <- df %>% mutate(OneYAbsIOPChangeStdDev = abs(OneYAbsIOPChangeStdDev))
-  }
+  # Prevent a weird bug about negative SDs from reappearing.
+  stopifnot(any(df$OneYAbsIOPChangeStdDev < 0, na.rm=TRUE) == FALSE)
   
   # Fill in number of eyes. 
   if(impute.eyes) {
@@ -183,7 +186,7 @@ read.data <- function(agg.arms=TRUE,
   }
 
   if(impute.change) {
-    df <- fill.change(df, rho = 0.35)
+      df <- fill.change(df, rho = 0.28)
   }
 
   # Aggregate some study arms which correspond to different severities
@@ -194,6 +197,23 @@ read.data <- function(agg.arms=TRUE,
     df <- agg.arms(df, regexpr('Euswas', df$study.name) > 0)
     stopifnot(nrow.before - nrow(df) == 3)
   }
+  
+  # Clean up time of last follow up. Anything less than a year is put into the
+  # 6 month bin.
+  low.followup <- as.numeric(substr(as.character(df$TimeofLastPostOp), 1, 2)) < 12
+  low.followup <- ifelse(is.na(low.followup), FALSE, low.followup)
+  df[low.followup,] <- df[low.followup,] %>% mutate(
+    SixMoEyes = LastPeriodEyes,
+    SixMoIOPMean = LastPeriodIOPMean,
+    SixMoIOPStdDev = LastPeriodIOPStdDev,
+    SixMoAbsIOPChangeMean = LastPeriodAbsIOPChangeMean,
+    SixMoAbsIOPChangeStdDev = LastPeriodAbsIOPChangeStdDev,
+    LastPeriodEyes = NA,
+    LastPeriodIOPMean = NA,
+    LastPeriodIOPStdDev = NA,
+    LastPeriodAbsIOPChangeStdDev = NA,
+    LastPeriodAbsIOPChangeMean = NA
+  )
   
   if(fill.last) {
     # Where not otherwise specified, fill in the data for last follow-up with 
@@ -218,20 +238,6 @@ read.data <- function(agg.arms=TRUE,
     df <- df %>% filter(MIGsYorN == 'N')
   }
   
-  # Fix Shams et al., which is 7.2 months follow up
-  missing.data <- regexpr('Shams', df$study.name) > 0
-  df[missing.data,]$SixMoIOPMean <- df[missing.data,]$LastPeriodIOPMean
-  df[missing.data,]$SixMoIOPStdDev <- df[missing.data,]$LastPeriodIOPStdDev
-  df[missing.data,]$SixMoAbsIOPChangeMean <- df[missing.data,]$LastPeriodAbsIOPChangeMean
-  df[missing.data,]$SixMoAbsIOPChangeStdDev <- df[missing.data,]$LastPeriodAbsIOPChangeStdDev
-  df[missing.data,]$SixMoEyes <- df[missing.data,]$LastPeriodEyes
-  
-  df[missing.data,]$LastPeriodIOPMean <- NA
-  df[missing.data,]$LastPeriodIOPStdDev <- NA
-  df[missing.data,]$LastPeriodAbsIOPChangeMean <- NA
-  df[missing.data,]$LastPeriodAbsIOPChangeStdDev <- NA
-  df[missing.data,]$LastPeriodEyes <- NA
-
   return(df)
 }
 
