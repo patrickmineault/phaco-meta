@@ -288,13 +288,10 @@ test.fun <- function() {
   expect_equal(nrow(df %>% filter(washout.type != 'None', 
                                   (Washoutbaseline < PreOpIOPMean) | 
                                     (WashoutIOP < OneYIOPMean))), 0)
+  # Check that every IOP measurement has its own SD.
+  expect_equal(nrow(df[!is.na(df$SixMoAbsIOPChangeMean) & is.na(df$SixMoAbsIOPChangeStdDev),]), 0)
+  expect_equal(nrow(df[!is.na(df$OneYAbsIOPChangeMean) & is.na(df$OneYAbsIOPChangeStdDev),]), 0)
+  expect_equal(nrow(df[!is.na(df$LastPeriodAbsIOPChangeMean) & is.na(df$LastPeriodAbsIOPChangeStdDev),]), 0)
 }
 
 test.fun()
-
-
-# TODO: each of these should conditions should not have any studies associated with them.
-df <- read.data()
-df[!is.na(df$SixMoAbsIOPChangeMean) & is.na(df$SixMoAbsIOPChangeStdDev),]$study.name
-df[!is.na(df$OneYAbsIOPChangeMean) & is.na(df$OneYAbsIOPChangeStdDev),]$study.name
-df[!is.na(df$LastPeriodAbsIOPChangeMean) & is.na(df$LastPeriodAbsIOPChangeStdDev),]$study.name
