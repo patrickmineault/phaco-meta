@@ -29,7 +29,7 @@ df <- filter.data(df)
 
 ```{r fig.width=10, fig.height=10, dev="cairo_pdf"}
 df_ <- df %>% 
-  filter(!is.na(LastPeriodAbsIOPChangeMean), subtype != "acute", MIGsYorN == 'N') %>% 
+  filter(!is.na(LastPeriodAbsIOPChangeMean), subtype != "AACG", MIGsYorN == 'N') %>% 
   mutate(subtype=factor(subtype))
 m <- metagen(LastPeriodAbsIOPChangeMean, 
              LastPeriodAbsIOPChangeStdDev / sqrt(LastPeriodEyes), 
@@ -46,11 +46,11 @@ forest(m,
        leftlabs=c("Study", "ΔIOP", "SE", "eyes"))
 ```
 
-## Acute
+## AACG
 
 ```{r results="hold"}
 df_ <- df %>% 
-  filter(!is.na(LastPeriodAbsIOPChangeMean), subtype == "acute", MIGsYorN == 'N') %>% 
+  filter(!is.na(LastPeriodAbsIOPChangeMean), subtype == "AACG", MIGsYorN == 'N') %>% 
   mutate(subtype=factor(subtype)) %>% dplyr::arrange(Year)
 m <- metagen(LastPeriodAbsIOPChangeMean, 
              LastPeriodAbsIOPChangeStdDev / sqrt(LastPeriodEyes),
@@ -65,7 +65,7 @@ print(m)
 ```{r fig.width=10, fig.height=10, dev="cairo_pdf"}
 df_ <- df %>% 
   filter(!is.na(LastPeriodAbsIOPChangeMean),
-         df$subtype != "acute", MIGsYorN == 'N') %>% 
+         df$subtype != "AACG", MIGsYorN == 'N') %>% 
   mutate(subtype=factor(subtype))
 m <- metagen(RxChangeMean,
              RxChangeStdDev / sqrt(LastPeriodEyes), 
@@ -163,7 +163,7 @@ df <- read.data(fill.last = FALSE)
 
 ```{r fig.width=10, fig.height=8, dev="cairo_pdf"}
 df_ <- df %>% 
-  filter(!is.na(SixMoAbsIOPChangeMean), subtype != "acute") %>% 
+  filter(!is.na(SixMoAbsIOPChangeMean), subtype != "AACG") %>% 
   mutate(subtype=factor(subtype))
 m <- metagen(SixMoAbsIOPChangeMean, 
              SixMoAbsIOPChangeStdDev / sqrt(SixMoEyes), 
@@ -184,7 +184,7 @@ forest(m,
 
 ```{r fig.width=10, fig.height=9, dev="cairo_pdf"}
 df_ <- df %>% 
-  filter(!is.na(OneYAbsIOPChangeMean), subtype != "acute", MIGsYorN == 'N') %>% 
+  filter(!is.na(OneYAbsIOPChangeMean), subtype != "AACG", MIGsYorN == 'N') %>% 
   mutate(subtype=factor(subtype))
 m <- metagen(OneYAbsIOPChangeMean, 
              OneYAbsIOPChangeStdDev / sqrt(OneYEyes), 
@@ -205,7 +205,7 @@ forest(m,
 
 ```{r fig.width=10, fig.height=9, dev="cairo_pdf"}
 df_ <- df %>% 
-  filter(!is.na(LastPeriodAbsIOPChangeMean), subtype != "acute", MIGsYorN == 'N') %>% 
+  filter(!is.na(LastPeriodAbsIOPChangeMean), subtype != "AACG", MIGsYorN == 'N') %>% 
   mutate(subtype=factor(subtype))
 m <- metagen(LastPeriodAbsIOPChangeMean, 
              LastPeriodAbsIOPChangeStdDev / sqrt(LastPeriodEyes), 
@@ -226,8 +226,8 @@ forest(m,
 
 Measure the correlation between different outcomes (IOP at 6 months vs. 12 months).
 
-```{r}
-ggplot(df %>% filter(subtype != 'acute') %>% mutate(subtype = factor(subtype)), 
+```{r dev="cairo_pdf"}
+ggplot(df %>% filter(subtype != 'AACG') %>% mutate(subtype = factor(subtype)), 
        aes(x   =SixMoAbsIOPChangeMean, 
                xmin=SixMoAbsIOPChangeMean - 1.96*SixMoAbsIOPChangeStdDev / sqrt(SixMoEyes),
                xmax=SixMoAbsIOPChangeMean + 1.96*SixMoAbsIOPChangeStdDev / sqrt(SixMoEyes),
@@ -249,8 +249,9 @@ It's very clear that six months and 12 months IOP are highly correlated.
 
 Similarly for one-year vs. last period:
 
-```{r}
-ggplot(df, aes(y   =LastPeriodAbsIOPChangeMean, 
+```{r dev="cairo_pdf"}
+ggplot(df %>% filter(subtype != 'AACG') %>% mutate(subtype = factor(subtype)), 
+       aes(y   =LastPeriodAbsIOPChangeMean, 
                ymin=LastPeriodAbsIOPChangeMean - 1.96*LastPeriodAbsIOPChangeStdDev / sqrt(LastPeriodEyes),
                ymax=LastPeriodAbsIOPChangeMean + 1.96*LastPeriodAbsIOPChangeStdDev / sqrt(LastPeriodEyes),
                x   = OneYAbsIOPChangeMean,
@@ -270,7 +271,7 @@ Again, correlations are very high. Present this in another way.
 library(reshape2)
 nd <- melt(df %>% 
              filter(MIGsYorN == 'N',
-                    subtype != 'acute',
+                    subtype != 'AACG',
                     1*is.na(SixMoAbsIOPChangeMean) + 
                     1*is.na(OneYAbsIOPChangeMean) + 
                     1*is.na(LastPeriodAbsIOPChangeMean) < 2) %>%
@@ -324,6 +325,11 @@ drawn.corrs <- with(df_, replicate(n = 100,
 cat("Mean +- SE correlation, All subtypes\n")
 print(mean(drawn.corrs))
 print(sd(drawn.corrs))
+
+cat("Regression of one year against 6 months")
+print(summary(lm(OneYAbsIOPChangeMean ~ SixMoAbsIOPChangeMean, 
+                 df, 
+                 weights = OneYAbsIOPChangeStdDev / sqrt(OneYEyes))))
 ```
 
 This is also reflected in the correlations - even accounting for noise, the correlations
@@ -401,8 +407,12 @@ IOP drop at one year and its correlation with different factors.
 
 ```{r}
 df <- read.data()
-df_ <- df %>% filter(!is.na(LastPeriodAbsIOPChangeMean), subtype != "acute", MIGsYorN == 'N') %>% 
-  mutate(subtype=relevel(factor(subtype), ref="OAG"))
+#df <- filter.data(df, 'nowashout')
+df_ <- df %>% filter(!is.na(LastPeriodAbsIOPChangeMean), subtype != "AACG", MIGsYorN == 'N') %>% 
+  mutate(subtype=relevel(factor(subtype), ref="OAG"),
+         coarseWashoutType=factor(washout.type, c("None", "Partial", "Pre", "Both")))
+
+levels(df_$coarseWashoutType) <- c("None", "None", "Pre", "Both")
 m <- metagen(LastPeriodAbsIOPChangeMean, 
              LastPeriodAbsIOPChangeStdDev / sqrt(LastPeriodEyes), 
              study.name, 
@@ -415,7 +425,11 @@ print(metareg(~ LastPeriodEyes * subtype, x=m))
 print(metareg(~ Year, x=m))
 print(metareg(~ Year * subtype, x=m))
 print(metareg(~ PreOpIOPMean, x=m))
-print(metareg(~ PreOpIOPMean * subtype, x=m))
+print(metareg(~ PreOpIOPMean * subtype + coarseWashoutType, x=m))
+
+# Other factors to think about
+print(metareg(~ PreOpIOPMean * subtype + coarseWashoutType + AgeMean + Male, x=m))
+# There's nothing very interesting here.
 
 # Same, restricted to OAG only
 df_ <- df %>% filter(!is.na(LastPeriodAbsIOPChangeMean), subtype == "OAG", MIGsYorN == 'N') %>% 
@@ -434,7 +448,7 @@ bubble(metareg(~ PreOpIOPMean, x=m))
 
 ```{r}
 df_ <- df %>% filter(!is.na(df$LastPeriodAbsIOPChangeMean), 
-                     df$subtype != "acute", 
+                     df$subtype != "AACG", 
                      MIGsYorN == 'N') %>% mutate(subtype=factor(subtype))
 for(l in levels(df_$subtype)) {
   m <- metagen(LastPeriodAbsIOPChangeMean, 
@@ -456,7 +470,7 @@ for(l in levels(df_$subtype)) {
 df <- read.data()
 df <- filter.data(df, 'prospective')
 df_ <- df %>% 
-  filter(!is.na(LastPeriodAbsIOPChangeMean), subtype != "acute", MIGsYorN == 'N') %>% 
+  filter(!is.na(LastPeriodAbsIOPChangeMean), subtype != "AACG", MIGsYorN == 'N') %>% 
   mutate(subtype=factor(subtype))
 m <- metagen(LastPeriodAbsIOPChangeMean, 
              LastPeriodAbsIOPChangeStdDev / sqrt(LastPeriodEyes), 
@@ -477,7 +491,7 @@ forest(m,
 ```{r fig.width=10, fig.height=10, dev="cairo_pdf"}
 df_ <- df %>% 
   filter(!is.na(RxChangeMean), !is.na(RxChangeStdDev),
-         df$subtype != "acute", MIGsYorN == 'N') %>% 
+         df$subtype != "AACG", MIGsYorN == 'N') %>% 
   mutate(subtype=factor(subtype))
 m <- metagen(RxChangeMean,
              sqrt(RxPostOpStdDev** 2 + RxPreOpStdDev ** 2) / sqrt(LastPeriodEyes), 
@@ -504,7 +518,7 @@ df <- filter.data(df, 'nowashout')
 
 ```{r fig.width=10, fig.height=9, dev="cairo_pdf"}
 df_ <- df %>% 
-  filter(!is.na(LastPeriodAbsIOPChangeMean), subtype != "acute", MIGsYorN == 'N') %>% 
+  filter(!is.na(LastPeriodAbsIOPChangeMean), subtype != "AACG", MIGsYorN == 'N') %>% 
   mutate(subtype=factor(subtype))
 m <- metagen(LastPeriodAbsIOPChangeMean, 
              LastPeriodAbsIOPChangeStdDev / sqrt(LastPeriodEyes), 
@@ -525,7 +539,7 @@ forest(m,
 ```{r fig.width=10, fig.height=10}
 df_ <- df %>% 
   filter(!is.na(RxChangeMean), !is.na(RxChangeStdDev),
-         df$subtype != "acute", MIGsYorN == 'N') %>% 
+         df$subtype != "AACG", MIGsYorN == 'N') %>% 
   mutate(subtype=factor(subtype))
 m <- metagen(RxChangeMean,
              sqrt(RxPostOpStdDev** 2 + RxPreOpStdDev ** 2) / sqrt(LastPeriodEyes), 
@@ -552,7 +566,7 @@ meta.analysis.with.sensitivity <- function(missingness='zero') {
   df <- filter.data(df, 'prospective')
   
   df_ <- df %>% 
-    filter(!is.na(LastPeriodAbsIOPChangeMean), subtype != "acute") %>% 
+    filter(!is.na(LastPeriodAbsIOPChangeMean), subtype != "AACG") %>% 
     mutate(subtype=factor(subtype))
   
   # Simulate a 0 effect in the unobserved fraction.
@@ -612,7 +626,7 @@ meta-analysis, which we plan to do in a future paper.
 ```{r fig.width=10.5, fig.height=8, dev="cairo_pdf"}
 df <- read.data(drop.migs = FALSE)
 df_ <- df %>% 
-  filter(!is.na(LastPeriodAbsIOPChangeMean), subtype != "acute", MIGsYorN == 'Y') %>% 
+  filter(!is.na(LastPeriodAbsIOPChangeMean), subtype != "AACG", MIGsYorN == 'Y') %>% 
   mutate(subtype=factor(subtype)) %>% dplyr::arrange(TypesofMIGSifany, Year)
 m <- metagen(LastPeriodAbsIOPChangeMean, 
              LastPeriodAbsIOPChangeStdDev / sqrt(LastPeriodEyes), 

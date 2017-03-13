@@ -1,7 +1,8 @@
 ---
 title: "Methods and results"
 output:
-  pdf_document: 
+  word_document: default
+  pdf_document:
     latex_engine: xelatex
 geometry: margin=0.5in
 ---
@@ -79,7 +80,7 @@ median of the correlations in the studies reporting the full set of metrics
 (r = 0.28).
 
 ```{r message=FALSE}
-df <- read.data(impute.change = FALSE) %>% filter(subtype != 'acute')
+df <- read.data(impute.change = FALSE) %>% filter(subtype != 'AACG')
 rs <- with(df, (PreOpIOPStdDev ** 2 + LastPeriodIOPStdDev ** 2 - LastPeriodAbsIOPChangeStdDev ** 2) / (PreOpIOPStdDev * LastPeriodIOPStdDev)/2)
 quantile(rs, .5, na.rm=TRUE)
 ```
@@ -91,7 +92,7 @@ estimated from the reported pre- and post-surgery IOP SDs.
 
 Many studies reported several arms corresponding to different severities, 
 treatments and subtypes. For phacoemulsification studies, we aggregated 
-the data to obtain one arm per glaucoma subtype (ACG, OAG, PXG, acute) 
+the data to obtain one arm per glaucoma subtype (ACG, OAG, PXG, AACG) 
 per study. 
 
 After this step, the total number of arms and eyes per subtype was as follows:
@@ -163,6 +164,27 @@ df_ <- df %>% filter(!is.na(LastPeriodAbsIOPChangeMean)) %>%
 kable(df_, digits = 1)
 ```
 
+As one big table:
+
+```{r}
+df_ <- df %>% filter(!is.na(LastPeriodAbsIOPChangeMean)) %>% 
+  arrange(subtype, Year, study.name) %>% 
+  dplyr::select(
+    study.name,
+    Year,
+    StudyType,
+    subtype,
+    PreEyes=PreOpEyes,
+    PreIOPMean=PreOpIOPMean,
+    PreIOPSD=PreOpIOPStdDev,
+    TimeofLastPostOp,
+    PostEyes=LastPeriodEyes,
+    PostIOPMean=LastPeriodIOPMean,
+    PostIOPSD=LastPeriodIOPStdDev,
+    PostIOPChangeMean=LastPeriodAbsIOPChangeMean,
+    PostIOPChangeSD=LastPeriodAbsIOPChangeStdDev) 
+kable(df_, digits = 1)
+```
 
 # 12 & 15. Risk of bias
 
@@ -197,7 +219,7 @@ both had significant loss in follow up.
 df <- read.data()
 df <- filter.data(df, 'prospective')
 
-df_ <- df %>% filter(subtype != 'acute', !is.na(LastPeriodEyes))
+df_ <- df %>% filter(subtype != 'AACG', !is.na(LastPeriodEyes))
 frac <- (df_$PreOpEyes - df_$LastPeriodEyes)/ df_$PreOpEyes
 frac.range <- data.frame("fraction with loss"=mean(frac > 0),
            "mean loss"=mean(frac),

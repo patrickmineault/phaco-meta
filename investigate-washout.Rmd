@@ -98,7 +98,7 @@ for(mmhg.per.med in mmhg.per.meds) {
   
   df_ <- df %>% 
     filter(!is.na(RxChangeMean), 
-           df$subtype != "acute", 
+           df$subtype != "AACG", 
            MIGsYorN == 'N',
            !is.na(LastPeriodAbsIOPChangeStdDev),
            !is.na(RxChangeStdDev)) %>% 

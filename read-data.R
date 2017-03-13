@@ -142,8 +142,13 @@ read.data <- function(agg.arms=TRUE,
                       LastPeriodEyes = LastPeriodofEyes
   )
   
+  df <- df %>% mutate(JournalVolumePage =  
+                ifelse(regexpr("O,", JournalVolumePage) == 1, 
+                       paste0("Ophthalmol,", substr(JournalVolumePage, 3, 100)),
+                       as.character(JournalVolumePage)))
+  
   df <- df %>% mutate(subtype = as.factor(
-    ifelse(acuteangleclosure == 'Y', 'acute', 
+    ifelse(acuteangleclosure == 'Y', 'AACG', 
            ifelse(MIGsYorN == 'Y' | OAG > 50, 'OAG',
                          ifelse(ACG > 50, 'ACG',
                                 ifelse(PXG > 50, 'PXG', NA))))))
