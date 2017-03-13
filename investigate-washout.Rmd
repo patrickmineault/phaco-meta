@@ -1,9 +1,9 @@
 ---
 title: "Investigate washout"
-output: 
+output:
+  word_document: default
   pdf_document:
     latex_engine: xelatex
-
 ---
 
 Some studies have washout, which can mean different things for different studies.
