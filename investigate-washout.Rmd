@@ -1,9 +1,9 @@
 ---
 title: "Investigate washout"
 output:
-  word_document: default
   pdf_document:
     latex_engine: xelatex
+  word_document: default
 ---
 
 Some studies have washout, which can mean different things for different studies.
@@ -13,6 +13,7 @@ Some studies have washout, which can mean different things for different studies
 library(knitr)
 library(grid)
 library(meta)
+library(pander)
 source("read-data.R")
 df <- read.data()
 ```
@@ -21,31 +22,31 @@ These are all the studies that are labeled as having washout:
 
 
 ```{r}
-kable(df %>% filter(WashOut == 'Y') %>% 
-  select(JournalVolumePage, Author, Year, subtype, TypesofMIGSifany))
+pander(df %>% filter(WashOut == 'Y') %>% 
+  select(JournalVolumePage, Author, Year, subtype))
 ```
 
 This study has pre- and post-washout and no measurements without washout. This is
 equivalent to setting the pre and post op meds to 0:
 
 ```{r}
-kable(df %>% filter(Washoutbaseline == PreOpIOPMean, !is.na(WashoutIOP)) %>% 
-  select(JournalVolumePage, Author, Year, TypesofMIGSifany))
+pander(df %>% filter(Washoutbaseline == PreOpIOPMean, !is.na(WashoutIOP)) %>% 
+  select(JournalVolumePage, Author, Year))
 ```
 
 This study has preop washout and no washout in the post period. Virgin patients
 were enrolled, and had 0 pre-op meds; only after were they put on meds:
 
 ```{r}
-kable(df %>% filter(Washoutbaseline == PreOpIOPMean, is.na(WashoutIOP)) %>% 
-  select(JournalVolumePage, Author, Year, TypesofMIGSifany))
+pander(df %>% filter(Washoutbaseline == PreOpIOPMean, is.na(WashoutIOP)) %>% 
+  select(JournalVolumePage, Author, Year))
 ```
 
 These studies had both washout and regular measurements in the pre-period. That 
 tells us about the relationship between meds and IOP:
 
 ```{r}
-kable(df %>% filter(Washoutbaseline != PreOpIOPMean) %>% 
+pander(df %>% filter(Washoutbaseline != PreOpIOPMean) %>% 
   mutate(mm.Hg.per.med = (Washoutbaseline - PreOpIOPMean)/RxPreOpMean,
          rel.p = 100*(1-(Washoutbaseline - PreOpIOPMean)/Washoutbaseline),
          rel.p.drop.per.med = 
@@ -64,7 +65,7 @@ This study has washout only in the last period; we can also use this to estimate
 the drop in IOP per med:
 
 ```{r}
-kable(df %>% filter(regexpr("Fea", Author)==TRUE) %>% 
+pander(df %>% filter(regexpr("Fea", Author)==TRUE) %>% 
   mutate(mm.Hg.per.med = (WashoutIOP - LastPeriodIOPMean)/RxPostOpMean,
          rel.p = 100*(1-(WashoutIOP - LastPeriodIOPMean)/WashoutIOP),
          rel.p.drop.per.med = 100*(1-exp(log(rel.p / 100) / RxPostOpMean))) %>%
@@ -80,8 +81,8 @@ med.
 I went back and classified the studies depending on the washout type:
 
 ```{r}
-kable(df %>% filter(washout.type != 'None') %>% 
-  select(JournalVolumePage, Author, Year, subtype, TypesofMIGSifany, washout.type))
+pander(df %>% filter(washout.type != 'None') %>% 
+  select(JournalVolumePage, Author, Year, subtype, washout.type))
 ```
 
 # Net effect - including IOP and meds

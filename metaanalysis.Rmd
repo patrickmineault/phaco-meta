@@ -58,6 +58,18 @@ m <- metagen(LastPeriodAbsIOPChangeMean,
              data=df_,
              n.e=LastPeriodEyes, comb.fixed = FALSE)
 print(m)
+
+df_ <- df %>% 
+  filter(!is.na(LastPeriodAbsIOPChangeMean), subtype == "AACG", MIGsYorN == 'N') %>% 
+  mutate(subtype=factor(subtype)) %>% dplyr::arrange(Year)
+m <- metagen(RxChangeMean,
+             RxChangeStdDev / sqrt(LastPeriodEyes),
+             study.name, 
+             data=df_,
+             n.e=LastPeriodEyes, comb.fixed = FALSE)
+print(m)
+
+df_ %>% dplyr::select(RxPreOpMean, RxPostOpMean)
 ```
 
 ## Meds
@@ -407,12 +419,28 @@ IOP drop at one year and its correlation with different factors.
 
 ```{r}
 df <- read.data()
-#df <- filter.data(df, 'nowashout')
-df_ <- df %>% filter(!is.na(LastPeriodAbsIOPChangeMean), subtype != "AACG", MIGsYorN == 'N') %>% 
-  mutate(subtype=relevel(factor(subtype), ref="OAG"),
-         coarseWashoutType=factor(washout.type, c("None", "Partial", "Pre", "Both")))
-
+df_ <- df %>% filter(!is.na(LastPeriodAbsIOPChangeMean), 
+                     subtype != "AACG", 
+                     MIGsYorN == 'N') %>% 
+  mutate(coarseWashoutType=factor(washout.type, c("None", "Partial", "Pre", "Both")),
+         subtype=relevel(factor(subtype), ref="OAG"))
 levels(df_$coarseWashoutType) <- c("None", "None", "Pre", "Both")
+
+m <- metagen(LastPeriodAbsIOPChangeMean, 
+             LastPeriodAbsIOPChangeStdDev / sqrt(LastPeriodEyes), 
+             study.name, 
+             data=df_,
+             byvar=subtype,
+             n.e=OneYEyes)
+
+# Leveled against OAG
+print(metareg(~ LastPeriodEyes, x=m))
+print(metareg(~ Year, x=m))
+print(metareg(~ PreOpIOPMean * subtype + coarseWashoutType + AgeMean + Male, x=m))
+
+# Leveled against ACG
+df_ <- df_ %>% mutate(subtype=relevel(factor(subtype), ref="ACG"))
+
 m <- metagen(LastPeriodAbsIOPChangeMean, 
              LastPeriodAbsIOPChangeStdDev / sqrt(LastPeriodEyes), 
              study.name, 
@@ -421,27 +449,32 @@ m <- metagen(LastPeriodAbsIOPChangeMean,
              n.e=OneYEyes)
 
 print(metareg(~ LastPeriodEyes, x=m))
-print(metareg(~ LastPeriodEyes * subtype, x=m))
 print(metareg(~ Year, x=m))
-print(metareg(~ Year * subtype, x=m))
-print(metareg(~ PreOpIOPMean, x=m))
-print(metareg(~ PreOpIOPMean * subtype + coarseWashoutType, x=m))
-
-# Other factors to think about
 print(metareg(~ PreOpIOPMean * subtype + coarseWashoutType + AgeMean + Male, x=m))
-# There's nothing very interesting here.
 
-# Same, restricted to OAG only
-df_ <- df %>% filter(!is.na(LastPeriodAbsIOPChangeMean), subtype == "OAG", MIGsYorN == 'N') %>% 
-  mutate(subtype=relevel(factor(subtype), ref="OAG"))
+
+# Leveled against PXG
+df_ <- df_ %>% mutate(subtype=relevel(factor(subtype), ref="ACG"))
+
 m <- metagen(LastPeriodAbsIOPChangeMean, 
              LastPeriodAbsIOPChangeStdDev / sqrt(LastPeriodEyes), 
              study.name, 
              data=df_,
              byvar=subtype,
-             n.e=LastPeriodEyes)
+             n.e=OneYEyes)
 
-bubble(metareg(~ PreOpIOPMean, x=m))
+print(metareg(~ LastPeriodEyes, x=m))
+print(metareg(~ Year, x=m))
+print(metareg(~ PreOpIOPMean * subtype + coarseWashoutType + AgeMean + Male, x=m))
+
+
+# Restricted to OAG only
+df %>% 
+  filter(subtype == 'OAG', washout.type != 'Both', !is.na(LastPeriodAbsIOPChangeStdDev)) %>% 
+  summarize(min = min(PreOpIOPMean),
+            max = max(PreOpIOPMean),
+            sd = sd(PreOpIOPMean),
+            mean = mean(PreOpIOPMean))
 ```
 
 # Small study bias
