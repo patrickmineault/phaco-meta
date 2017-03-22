@@ -1,9 +1,9 @@
 ---
 title: "Methods and results"
 output:
-  word_document: default
   pdf_document:
     latex_engine: xelatex
+  word_document: default
 geometry: margin=0.5in
 ---
 
@@ -98,7 +98,9 @@ per study.
 After this step, the total number of arms and eyes per subtype was as follows:
 
 ```{r message=FALSE}
-df <- read.data(fill.last=FALSE)
+df <- read.data(fill.last=TRUE)
+print("Number of unique studies:")
+print(length(unique(df$study.name)))
 df_ <- df %>% filter(!is.na(LastPeriodAbsIOPChangeMean)) %>% group_by(subtype) %>% 
   dplyr::summarize(
     n.total = n(),
