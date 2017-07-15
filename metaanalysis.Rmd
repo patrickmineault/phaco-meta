@@ -454,7 +454,7 @@ print(metareg(~ PreOpIOPMean * subtype + coarseWashoutType + AgeMean + Male, x=m
 
 
 # Leveled against PXG
-df_ <- df_ %>% mutate(subtype=relevel(factor(subtype), ref="PXG"))
+df_ <- df_ %>% mutate(subtype=relevel(factor(subtype), ref="ACG"))
 
 m <- metagen(LastPeriodAbsIOPChangeMean, 
              LastPeriodAbsIOPChangeStdDev / sqrt(LastPeriodEyes), 
