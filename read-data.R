@@ -1,5 +1,6 @@
 library(testthat)
 library(dplyr)
+library(stringr)
 
 agg.arms <- function(df, which.arms) {
   # Aggregate different arms of the same study.
@@ -118,7 +119,9 @@ read.data <- function(agg.arms=TRUE,
                       impute.change=TRUE, 
                       impute.eyes=TRUE, 
                       drop.migs=TRUE,
-                      fill.last=TRUE) {
+                      fill.last=TRUE,
+                      exclude.short=TRUE,
+                      no.processing=FALSE) {
   # Read data from the phaco meta-analysis and fix encodings
   fileName <- 'phaco.csv'
   read.file <- readChar(fileName, file.info(fileName)$size)
@@ -145,7 +148,8 @@ read.data <- function(agg.arms=TRUE,
   df <- df %>% mutate(JournalVolumePage =  
                 ifelse(regexpr("O,", JournalVolumePage) == 1, 
                        paste0("Ophthalmol,", substr(JournalVolumePage, 3, 100)),
-                       as.character(JournalVolumePage)))
+                       as.character(JournalVolumePage)),
+                TimeofLastPostOp = as.character(TimeofLastPostOp))
   
   df <- df %>% mutate(subtype = as.factor(
     ifelse(acuteangleclosure == 'Y', 'AACG', 
@@ -182,6 +186,11 @@ read.data <- function(agg.arms=TRUE,
     mutate(hayashi.symbol = ifelse(regexpr("Hayashi", df$Author) > 0, "†", ""),
            study.name = paste0(Author, ' (', Year, ')', washout.labels[washout.type], hayashi.symbol))
   
+  if(no.processing) {
+    return(df)
+  }
+  
+  
   # Prevent a weird bug about negative SDs from reappearing.
   stopifnot(any(df$OneYAbsIOPChangeStdDev < 0, na.rm=TRUE) == FALSE)
   
@@ -203,10 +212,31 @@ read.data <- function(agg.arms=TRUE,
     stopifnot(nrow.before - nrow(df) == 3)
   }
   
+  # Fill in information about missing time information.
+  missing.time <- (is.na(df$LastPeriodIOPMean) & is.na(df$LastPeriodAbsIOPChangeMean)) & (!is.na(df$OneYAbsIOPChangeMean) | !is.na(df$OneYIOPMean))
+  df[missing.time,]$TimeofLastPostOp <- "12 mo"
+  
+  missing.time <- is.na(df$TimeofLastPostOp)
+  df[missing.time,]$TimeofLastPostOp <- "6 mo"
+  
+  # Fix this value which doesn't have a space.
+  df[df$TimeofLastPostOp == '24mo',]$TimeofLastPostOp <- "24 mo"
+  
+  last.space <- str_locate(df$TimeofLastPostOp, ' ')[,1]
+  
+  expect_equal(sum(is.na(last.space)), 0)
+  df$StudyLength <- as.numeric(substr(df$TimeofLastPostOp, 1, last.space))
+  expect_equal(sum(is.na(df$StudyLength)), 0)
+  expect_gt(sum(df$StudyLength == 6), 0)
+  expect_gt(sum(df$StudyLength == 12), 0)
+  expect_equal(sum(df$StudyLength == 7.2), 1)
+  
   # Clean up time of last follow up. Anything less than a year is put into the
-  # 6 month bin.
-  low.followup <- as.numeric(substr(as.character(df$TimeofLastPostOp), 1, 2)) < 12
-  low.followup <- ifelse(is.na(low.followup), FALSE, low.followup)
+  # 6 month bin. This should only affect 3 studies (4 arms) that have between 6 and 
+  # 12 month follow-up, and one MIGS which is weirdly coded.
+  low.followup <- (df$StudyLength < 12) & (!is.na(df$LastPeriodIOPMean) | !is.na(df$LastPeriodAbsIOPChangeMean))
+  expect_true(sum(low.followup)>= 4 && sum(low.followup)<= 5)
+  
   df[low.followup,] <- df[low.followup,] %>% mutate(
     SixMoEyes = LastPeriodEyes,
     SixMoIOPMean = LastPeriodIOPMean,
@@ -231,7 +261,12 @@ read.data <- function(agg.arms=TRUE,
     df[missing.data,]$LastPeriodAbsIOPChangeMean <- df[missing.data,]$OneYAbsIOPChangeMean
     df[missing.data,]$LastPeriodAbsIOPChangeStdDev <- df[missing.data,]$OneYAbsIOPChangeStdDev
     df[missing.data,]$LastPeriodEyes <- df[missing.data,]$OneYEyes
-    df[missing.data,]$TimeofLastPostOp <- "12 mo"
+    
+  }
+  
+  if(exclude.short) {
+    # Drop experiments where there's < 12 month follow-up.
+    df <- df[df$StudyLength >= 12,]
   }
   
   df <- df %>% dplyr::arrange(Year, study.name)
@@ -272,7 +307,7 @@ read.column.names <- function() {
 
 # Unit test agg.arms, without polluting the global namespace.
 test.fun <- function() {
-  df <- read.data(FALSE)
+  df <- read.data(FALSE, exclude.short=FALSE)
   expect_equal(nrow(df) - 1, nrow(agg.arms(df, regexpr('Euswas', df$study.name) > 0)))
   tgt <- regexpr('Euswas', df$study.name) > 0
   

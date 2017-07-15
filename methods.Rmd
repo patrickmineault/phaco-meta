@@ -125,14 +125,18 @@ df_ <- df %>% group_by(subtype) %>%
     n.total = n(),
     n.prospective = sum(StudyType == 'Prospective'),
     n.retrospective = sum(StudyType == 'Retrospective'),
-    PreOpEyes = sum(PreOpEyes))
+    PreOpEyes = sum(PreOpEyes),
+    PreOpIOPMean = mean(PreOpIOPMean),
+    PreOpIOPSd = sd(PreOpIOPMean, na.rm = TRUE))
 
 df_ <- df_ %>% rbind(., summarize(df_, 
                                   subtype="(all)",
                                   n.total=sum(n.total),
                                   n.prospective=sum(n.prospective),
                                   n.retrospective=sum(n.retrospective),
-                                  PreOpEyes=sum(PreOpEyes)))
+                                  PreOpEyes=sum(PreOpEyes),
+                                  PreOpIOPMean=mean(PreOpIOPMean),
+                                  PreOpIOPSd = mean(PreOpIOPSd)))
 kable(df_, caption = "Number of arms across all studies")
 ```
 
